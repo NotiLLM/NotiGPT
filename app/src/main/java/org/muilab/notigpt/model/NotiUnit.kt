@@ -104,6 +104,8 @@ data class NotiUnit(
         ranking = rankingMap.orderedKeys.indexOf(sbn.key)
 
         // time
+        if (!update)
+            `when`.clear()
         `when`.add(sbn.notification?.`when` as Long)
         if (!update)
             postTime.clear()

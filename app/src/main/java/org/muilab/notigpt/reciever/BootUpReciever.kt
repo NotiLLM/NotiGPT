@@ -3,7 +3,6 @@ package org.muilab.notigpt.reciever
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import org.muilab.notigpt.service.NotiListenerService
 
 class BootUpReceiver : BroadcastReceiver() {

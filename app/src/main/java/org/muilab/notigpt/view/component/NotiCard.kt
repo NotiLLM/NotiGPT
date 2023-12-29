@@ -1,7 +1,6 @@
 package org.muilab.notigpt.view.component
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -99,7 +98,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                             "Notification Icon",
                             Modifier
                                 .size(35.dp)
-                                .padding(horizontal = 5.dp)
+                                .padding(horizontal = 6.dp)
                         )
                     }
                 }
@@ -196,7 +195,6 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                             text = notiContent,
                                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp)
                                         )
-                                        Log.d("Time", notiTimes.size.toString())
                                         if (notiContents.size > 1) {
                                             Text(
                                                 modifier = Modifier

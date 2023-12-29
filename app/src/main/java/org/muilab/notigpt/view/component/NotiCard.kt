@@ -1,6 +1,8 @@
 package org.muilab.notigpt.view.component
 
 import android.content.Context
+import android.util.Log
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +41,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.R
 import org.muilab.notigpt.model.NotiUnit
@@ -46,8 +51,10 @@ import org.muilab.notigpt.service.NotiListenerService
 @Composable
 fun NotiCard(context: Context, notiUnit: NotiUnit) {
     val bitmap = notiUnit.getBitmap()
+    val largeBitmap = notiUnit.getLargeBitmap()
 
     var expansionProgress by remember { mutableFloatStateOf(0f) }
+    var collapsed by remember { mutableStateOf(true) }
     var maxContentHeight by remember { mutableFloatStateOf(0f) }
     var requiresExpansion by remember { mutableStateOf(notiUnit.content.size > 1)}
 
@@ -59,27 +66,42 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
         }
     }
 
+    LaunchedEffect(expansionProgress) {
+        collapsed = expansionProgress == 0f
+    }
+
     Card(
         modifier = Modifier
-            .padding(vertical = 3.dp)
+            .padding(vertical = 1.dp)
             .fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         onClick = { NotiListenerService.getPendingIntent(context, notiUnit)?.send() }
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
         ) {
             Spacer(modifier = Modifier.size(5.dp))
             if (bitmap != null)
                 Column {
                     Spacer(modifier = Modifier.size(5.dp))
-                    Icon(
-                        bitmap.asImageBitmap(),
-                        "Notification Icon",
-                        Modifier
-                            .size(40.dp)
-                            .padding(horizontal = 5.dp)
-                    )
+                    if (expansionProgress > 0f && largeBitmap != null) {
+                        Image(
+                            largeBitmap.asImageBitmap(),
+                            "Notification Icon",
+                            Modifier
+                                .size(35.dp)
+                                .padding(horizontal = 5.dp)
+                        )
+                        largeBitmap.asImageBitmap()
+                    } else {
+                        Icon(
+                            bitmap.asImageBitmap(),
+                            "Notification Icon",
+                            Modifier
+                                .size(35.dp)
+                                .padding(horizontal = 5.dp)
+                        )
+                    }
                 }
             Column {
                 Row {
@@ -88,9 +110,9 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                             .padding(horizontal = 5.dp)
                             .weight(1f)) {
                         Row {
-                            Text(text = notiUnit.appName)
+                            Text(text = notiUnit.appName, fontSize = 14.sp)
                             Spacer(Modifier.padding(5.dp))
-                            Text(text = notiUnit.getLastTime())
+                            Text(text = notiUnit.getLastTime(), fontSize = 14.sp)
                         }
                         Row {
                             Text(
@@ -100,6 +122,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                fontSize = 14.sp,
                                 onTextLayout = { textLayoutResult ->
                                     if (textLayoutResult.hasVisualOverflow)
                                         requiresExpansion = true
@@ -115,7 +138,8 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                     onTextLayout = { textLayoutResult ->
                                         if (textLayoutResult.hasVisualOverflow)
                                             requiresExpansion = true
-                                    }
+                                    },
+                                    fontSize = 14.sp
                                 )
                             }
                         }
@@ -123,10 +147,10 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
 
                     if (requiresExpansion) {
                         Icon(
-                            painter = if (expansionProgress > 0f)
-                                painterResource(R.drawable.expand_less)
+                            painter = if (collapsed)
+                                painterResource(R.drawable.expand_more)
                             else
-                                painterResource(R.drawable.expand_more),
+                                painterResource(R.drawable.expand_less),
                             "Expand",
                             Modifier
                                 .width(30.dp)
@@ -135,8 +159,8 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                 .draggable(
                                     state = draggableState,
                                     orientation = Orientation.Vertical,
-                                    onDragStopped = {
-                                        expansionProgress = if (expansionProgress > 0.3f) 1f else 0F
+                                    onDragStopped = { velocity ->
+                                        expansionProgress = if (velocity > 0) 1f else 0F
                                     }
                                 )
                                 .clickable {
@@ -157,14 +181,35 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                             )
 
                             Column {
-                                notiUnit.content.forEach { notiContent ->
-                                    Text(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 5.dp)
-                                            .background(Color.Transparent),
-                                        text = notiContent
-                                    )
+                                val notiContents = notiUnit.content
+                                val notiTimes = if (notiUnit.`when`.last() != 0L)
+                                    notiUnit.`when`
+                                else
+                                    notiUnit.postTime
+                                notiContents.zip(notiTimes).forEach { (notiContent, notiTime) ->
+                                    Row(Modifier.fillMaxWidth()) {
+                                        Text(
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .padding(start = 5.dp)
+                                                .background(Color.Transparent),
+                                            text = notiContent,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp)
+                                        )
+                                        Log.d("Time", notiTimes.size.toString())
+                                        if (notiContents.size > 1) {
+                                            Text(
+                                                modifier = Modifier
+                                                    .wrapContentWidth()
+                                                    .background(Color.Transparent),
+                                                text = notiUnit.getRelativeTimeStr(notiTime),
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    fontSize = 14.sp
+                                                )
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.padding(horizontal = 5.dp))
+                                    }
                                 }
                             }
                         }

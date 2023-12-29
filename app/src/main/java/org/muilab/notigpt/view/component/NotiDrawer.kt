@@ -36,7 +36,7 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
 
     LazyColumn(modifier = Modifier
         .fillMaxSize()
-        .padding(16.dp)
+        .padding(8.dp)
     ) {
         items(
             count = lazyPagingItems.itemCount,

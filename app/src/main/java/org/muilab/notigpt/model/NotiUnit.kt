@@ -10,6 +10,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Icon
+import android.icu.text.RelativeDateTimeFormatter
+import android.icu.util.ULocale
 import android.os.Build
 import android.os.Build.VERSION_CODES.TIRAMISU
 import android.service.notification.NotificationListenerService.RankingMap
@@ -21,8 +23,12 @@ import androidx.room.TypeConverters
 import org.muilab.notigpt.service.NotiListenerService
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import kotlin.math.abs
+
 
 @Entity(tableName = "noti_drawer", primaryKeys = ["sbnKey"])
 @TypeConverters(ArrayListTypeConverters::class)
@@ -35,6 +41,7 @@ data class NotiUnit(
     val isAppGroup: Boolean,
     var appName: String = "Unknown App",
     var icon: String = "Unknown Icon",
+    var largeIcon: String = "Unknown Icon",
     // Modifiable
     var sortKey: String,
     var ranking: Int = -1,
@@ -83,16 +90,14 @@ data class NotiUnit(
         })
 
         // icon
-        val iconObject = sbn.notification?.getLargeIcon()?: sbn.notification.smallIcon
-        icon = iconToBase64(context, pm, iconObject)
+        icon = iconToBase64(context, pm, sbn.notification.smallIcon)
+        val bigiconObject = sbn.notification.getLargeIcon()
+        largeIcon = iconToBase64(context, pm, bigiconObject)
+        if (largeIcon == "null")
+            largeIcon = icon
     }
 
     fun updateNoti(sbn: StatusBarNotification, rankingMap: RankingMap, update: Boolean = false) {
-
-        fun replaceChars(str: String): String {
-            // return str.replace("\n", " ").replace(",", " ")
-            return str
-        }
 
         // sort variables
         sortKey = sbn.notification?.sortKey.toString()
@@ -108,7 +113,7 @@ data class NotiUnit(
         val notiTitle = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE).toString()
         if (!update)
             title.clear()
-        title.add(replaceChars(notiTitle))
+        title.add(notiTitle)
 
         // content
         var notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
@@ -122,7 +127,7 @@ data class NotiUnit(
             notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_SUB_TEXT).toString()
         if (!update)
             content.clear()
-        content.add(replaceChars(notiContent))
+        content.add(notiContent)
 
         // save pending intent
         val pendingIntent = sbn.notification?.contentIntent
@@ -161,8 +166,19 @@ data class NotiUnit(
     }
 
     private fun base64ToBitmap(iconStr: String): Bitmap {
+        val options = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
         val byteArray = Base64.decode(iconStr, Base64.DEFAULT)
-        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+        return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size, options)
+    }
+
+    fun getLargeBitmap(): Bitmap? {
+        return if (largeIcon != "null")
+            base64ToBitmap(largeIcon)
+        else {
+            getBitmap()
+        }
     }
 
     fun getBitmap(): Bitmap? {
@@ -172,7 +188,7 @@ data class NotiUnit(
             null
     }
 
-    private fun unixTimeToStr(unixTime: Long): String {
+    fun unixTimeToStr(unixTime: Long): String {
         val simpleDateFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
         val date = Date(unixTime)
         return simpleDateFormat.format(date)
@@ -180,8 +196,45 @@ data class NotiUnit(
 
     fun getLastTime(): String {
         return if (`when`.last() != 0L)
-            unixTimeToStr(`when`.last())
+            getRelativeTimeStr(`when`.last())
         else
-            unixTimeToStr(postTime.last())
+            getRelativeTimeStr(postTime.last())
+    }
+
+
+    fun getRelativeTimeStr(unixTime: Long, locale: Locale = Locale("zh", "TW")): String {
+        val now = System.currentTimeMillis()
+        val diffInMillis = now - unixTime
+        val formatter = RelativeDateTimeFormatter.getInstance(ULocale.forLocale(locale))
+
+        // Calculate differences in various units
+        val diffInMinutes = TimeUnit.MILLISECONDS.toMinutes(abs(diffInMillis))
+        val diffInHours = TimeUnit.MILLISECONDS.toHours(abs(diffInMillis))
+        val diffInDays = TimeUnit.MILLISECONDS.toDays(abs(diffInMillis))
+
+        return when {
+            diffInMillis < TimeUnit.MINUTES.toMillis(1) -> "現在"
+            diffInMinutes < 60 -> formatter.format(diffInMinutes.toDouble(), RelativeDateTimeFormatter.Direction.LAST, RelativeDateTimeFormatter.RelativeUnit.MINUTES).toString()
+            diffInHours < 3 -> formatter.format(diffInHours.toDouble(), RelativeDateTimeFormatter.Direction.LAST, RelativeDateTimeFormatter.RelativeUnit.HOURS).toString()
+            diffInHours < 24 -> {
+                val calNow = Calendar.getInstance()
+                val calInput = Calendar.getInstance().apply { timeInMillis = unixTime}
+                val dateFormat = if (calNow.get(Calendar.DATE) - calInput.get(Calendar.DATE) == 1) {
+                    SimpleDateFormat("'昨天' HH:mm", locale)
+                } else {
+                    SimpleDateFormat("HH:mm", locale)
+                }
+                dateFormat.format(Date(unixTime))
+            }
+            diffInDays == 1L -> "昨天"
+            diffInDays < 7 -> {
+                val dayFormat = SimpleDateFormat("EEEE", locale)
+                dayFormat.format(Date(unixTime))
+            }
+            else -> {
+                val dateFormat = SimpleDateFormat("M'月' d'日'", Locale.getDefault())
+                dateFormat.format(Date(unixTime))
+            }
+        }
     }
 }

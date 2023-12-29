@@ -9,7 +9,6 @@ import android.content.Intent
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,6 +35,9 @@ class NotiListenerService: NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        activeNotifications.forEach {
+            addNotification(it, currentRanking, true)
+        }
     }
 
     override fun onListenerDisconnected() {
@@ -72,7 +74,10 @@ class NotiListenerService: NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap) {
+        addNotification(sbn, rankingMap, false)
+    }
 
+    private fun addNotification(sbn: StatusBarNotification, rankingMap: RankingMap, isInit: Boolean) {
         fun isMessageNotification(sbn: StatusBarNotification): Boolean {
             val notification = sbn.notification
             return (notification.extras.get(Notification.EXTRA_MESSAGES) != null
@@ -87,7 +92,7 @@ class NotiListenerService: NotificationListenerService() {
             val existingNoti = drawerDao.getBySbnKey(sbn.key)
             if (existingNoti.isEmpty()) {
                 drawerDao.insert(NotiUnit(applicationContext, sbn, rankingMap))
-            } else {
+            } else if (!isInit) {
                 existingNoti[0].updateNoti(sbn, rankingMap, isMessageNotification(sbn))
                 drawerDao.update(existingNoti[0])
             }

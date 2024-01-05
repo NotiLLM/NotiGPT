@@ -10,8 +10,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Icon
-import android.icu.text.RelativeDateTimeFormatter
-import android.icu.util.ULocale
 import android.os.Build
 import android.os.Build.VERSION_CODES.TIRAMISU
 import android.service.notification.NotificationListenerService.RankingMap
@@ -21,13 +19,11 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.room.Entity
 import androidx.room.TypeConverters
 import org.muilab.notigpt.service.NotiListenerService
+import org.muilab.notigpt.util.getDisplayTimeStr
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.TimeUnit
-import kotlin.math.abs
 
 
 @Entity(tableName = "noti_drawer", primaryKeys = ["sbnKey"])
@@ -37,6 +33,7 @@ data class NotiUnit(
     val pkgName: String,
     val category: String,
     val sbnKey: String,
+    val hashKey: Int,
     val groupKey: String,
     val isAppGroup: Boolean,
     var appName: String = "Unknown App",
@@ -45,6 +42,12 @@ data class NotiUnit(
     // Modifiable
     var sortKey: String,
     var ranking: Int = -1,
+    var gptCategory: String = "",
+    var summary: String = "",
+    var score: Double = 30.0,
+    var scoreTime: Double = 10.0,
+    var scoreSender: Double = 10.0,
+    var scoreContent: Double = 10.0,
     //  Accumulatable
     val `when`: ArrayList<Long>,
     val postTime: ArrayList<Long>,
@@ -56,6 +59,7 @@ data class NotiUnit(
         pkgName = sbn.opPkg,
         category = sbn.notification?.category ?: "Unknown",
         sbnKey = sbn.key,
+        hashKey = sbn.key.hashCode(),
         groupKey = sbn.notification?.group.toString(),
         isAppGroup = sbn.isGroup,
         sortKey = sbn.notification?.sortKey.toString(),
@@ -198,45 +202,17 @@ data class NotiUnit(
 
     fun getLastTime(): String {
         return if (`when`.last() != 0L)
-            getRelativeTimeStr(`when`.last())
+            getDisplayTimeStr(`when`.last())
         else
-            getRelativeTimeStr(postTime.last())
+            getDisplayTimeStr(postTime.last())
     }
 
-
-    fun getRelativeTimeStr(unixTime: Long, locale: Locale = Locale("zh", "TW")): String {
-        val now = System.currentTimeMillis()
-        val diffInMillis = now - unixTime
-        val formatter = RelativeDateTimeFormatter.getInstance(ULocale.forLocale(locale))
-
-        // Calculate differences in various units
-        val diffInMinutes = TimeUnit.MILLISECONDS.toMinutes(abs(diffInMillis))
-        val diffInHours = TimeUnit.MILLISECONDS.toHours(abs(diffInMillis))
-        val diffInDays = TimeUnit.MILLISECONDS.toDays(abs(diffInMillis))
-
-        return when {
-            diffInMillis < TimeUnit.MINUTES.toMillis(1) -> "現在"
-            diffInMinutes < 60 -> formatter.format(diffInMinutes.toDouble(), RelativeDateTimeFormatter.Direction.LAST, RelativeDateTimeFormatter.RelativeUnit.MINUTES).toString()
-            diffInHours < 3 -> formatter.format(diffInHours.toDouble(), RelativeDateTimeFormatter.Direction.LAST, RelativeDateTimeFormatter.RelativeUnit.HOURS).toString()
-            diffInHours < 24 -> {
-                val calNow = Calendar.getInstance()
-                val calInput = Calendar.getInstance().apply { timeInMillis = unixTime}
-                val dateFormat = if (calNow.get(Calendar.DATE) - calInput.get(Calendar.DATE) == 1) {
-                    SimpleDateFormat("'昨天' HH:mm", locale)
-                } else {
-                    SimpleDateFormat("HH:mm", locale)
-                }
-                dateFormat.format(Date(unixTime))
-            }
-            diffInDays == 1L -> "昨天"
-            diffInDays < 7 -> {
-                val dayFormat = SimpleDateFormat("EEEE", locale)
-                dayFormat.format(Date(unixTime))
-            }
-            else -> {
-                val dateFormat = SimpleDateFormat("M'月' d'日'", Locale.getDefault())
-                dateFormat.format(Date(unixTime))
-            }
-        }
+    fun resetGPTValues() {
+        summary = ""
+        gptCategory = ""
+        score = 30.0
+        scoreTime = 10.0
+        scoreSender = 10.0
+        scoreContent = 10.0
     }
 }

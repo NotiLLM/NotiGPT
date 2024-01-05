@@ -85,4 +85,14 @@ dependencies {
     val ktorVersion = "2.3.7"
     implementation("com.aallam.openai:openai-client:3.6.2")
     implementation("io.ktor:ktor-client-android:$ktorVersion")
+
+    // dotenv
+    implementation("io.github.cdimascio:dotenv-kotlin:6.4.1")
+
+    // OpenCC
+    implementation("com.github.qichuan:android-opencc:1.2.0")
+
+    // Navigation
+    val navVersion = "2.7.6"
+    implementation("androidx.navigation:navigation-compose:$navVersion")
 }

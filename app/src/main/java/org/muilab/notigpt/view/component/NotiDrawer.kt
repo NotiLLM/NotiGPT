@@ -1,6 +1,7 @@
 package org.muilab.notigpt.view.component
 
 import android.content.Context
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
@@ -40,11 +41,13 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
     ) {
         items(
             count = lazyPagingItems.itemCount,
-            key = lazyPagingItems.itemKey {notiUnit -> "${notiUnit.ranking}_${notiUnit.sbnKey}"},
+            key = lazyPagingItems.itemKey {notiUnit -> "${String.format("%05.2f", 30 - notiUnit.scoreTime - notiUnit.scoreSender - notiUnit.scoreContent)}_${String.format("%03d", notiUnit.ranking)}_${notiUnit.sbnKey}"},
             contentType = lazyPagingItems.itemContentType { "Notifications" }
         ) { idx ->
             val notiUnit = lazyPagingItems[idx]
             notiUnit?.let { noti ->
+
+                Log.i("NotiDrawer", "${String.format("%05.2f", 30 - notiUnit.scoreTime - notiUnit.scoreSender - notiUnit.scoreContent)}_${String.format("%03d", notiUnit.ranking)}_${notiUnit.sbnKey}")
 
                 val dismissState = rememberDismissState(
                     confirmStateChange = {

@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -81,7 +82,9 @@ class NotiListenerService: NotificationListenerService() {
         fun isMessageNotification(sbn: StatusBarNotification): Boolean {
             val notification = sbn.notification
             return (notification.extras.get(Notification.EXTRA_MESSAGES) != null
-                    || notification.extras.get(Notification.EXTRA_HISTORIC_MESSAGES) != null)
+                    || notification.extras.get(Notification.EXTRA_HISTORIC_MESSAGES) != null
+                    || notification.extras.get(Notification.EXTRA_MESSAGING_PERSON) != null
+                    || notification.category == Notification.CATEGORY_MESSAGE)
         }
 
         if ((sbn.notification?.flags as Int and Notification.FLAG_GROUP_SUMMARY) > 0)
@@ -93,7 +96,9 @@ class NotiListenerService: NotificationListenerService() {
             if (existingNoti.isEmpty()) {
                 drawerDao.insert(NotiUnit(applicationContext, sbn, rankingMap))
             } else if (!isInit) {
-                existingNoti[0].updateNoti(sbn, rankingMap, isMessageNotification(sbn))
+                if (!existingNoti[0].isVisible())
+                    existingNoti[0].makeVisible(isMessageNotification(sbn))
+                existingNoti[0].updateNoti(applicationContext, sbn, rankingMap, isMessageNotification(sbn))
                 drawerDao.update(existingNoti[0])
             }
             rankingMap.orderedKeys.forEachIndexed { idx, key ->
@@ -107,10 +112,15 @@ class NotiListenerService: NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        Log.d("RemoveNoti", sbn.packageName)
         CoroutineScope(Dispatchers.IO).launch {
             val drawerDatabase = DrawerDatabase.getInstance(applicationContext)
             val drawerDao = drawerDatabase.drawerDao()
-            drawerDao.deleteBySbnKey(sbn.key)
+            val existingNoti = drawerDao.getBySbnKey(sbn.key)
+            if (existingNoti.isNotEmpty()) {
+                existingNoti[0].hideNoti()
+                drawerDao.update(existingNoti[0])
+            }
         }
     }
 

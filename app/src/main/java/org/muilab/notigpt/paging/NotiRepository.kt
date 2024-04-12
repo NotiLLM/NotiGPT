@@ -12,7 +12,7 @@ class NotiRepository(private val drawerDao: DrawerDao) {
         return Pager(
             PagingConfig(pageSize = 40, enablePlaceholders = false)
         ) {
-            drawerDao.getAllPaged()
+            drawerDao.getAllVisiblePaged()
         }.flow
     }
 }

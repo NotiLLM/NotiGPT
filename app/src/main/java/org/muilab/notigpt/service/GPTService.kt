@@ -84,11 +84,26 @@ class GPTService: Service() {
         val chunkSb = StringBuilder()
         val notiSb = StringBuilder()
         notifications.forEach { noti ->
+
             notiSb.append("[notiKey] ${noti.hashKey} [App] ${noti.appName}")
             val titlesIdentical = noti.title.toSet().size == 1
             if (titlesIdentical)
                 notiSb.append(" [Title] ${replaceChars(noti.title.last())}")
             notiSb.append("\n")
+
+            val prevThreadLength = minOf(noti.prevContent.size, noti.prevWhen.size, noti.prevPostTime.size)
+            if (prevThreadLength > 0) {
+                notiSb.append("[Context (Viewed Notifications)]\n")
+                val notiPrevTime = if (noti.prevWhen.last() == 0L)
+                    noti.prevPostTime.takeLast(prevThreadLength)
+                else
+                    noti.prevWhen.takeLast(prevThreadLength)
+                val notiPrevContent = noti.prevContent.takeLast(prevThreadLength)
+                for (i in 0..<prevThreadLength)
+                    notiSb.append("[Time] ${getDisplayTimeStr(notiPrevTime[i])} [Content] ${replaceChars(notiPrevContent[i])}\n")
+                notiSb.append("[New Notifications (Focus Mainly on These)]\n")
+            }
+
             val threadLength = if (titlesIdentical)
                 minOf(noti.content.size, noti.`when`.size, noti.postTime.size)
             else

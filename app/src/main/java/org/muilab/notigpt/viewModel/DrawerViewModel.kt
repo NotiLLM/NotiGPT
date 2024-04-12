@@ -29,7 +29,12 @@ class DrawerViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val drawerDatabase = DrawerDatabase.getInstance(context)
             val drawerDao = drawerDatabase.drawerDao()
-            drawerDao.deleteBySbnKey(notiUnit.sbnKey)
+            // drawerDao.deleteBySbnKey(notiUnit.sbnKey)
+            val existingNoti = drawerDao.getBySbnKey(notiUnit.sbnKey)
+            if (existingNoti.isNotEmpty()) {
+                existingNoti[0].hideNoti()
+                drawerDao.update(existingNoti[0])
+            }
         }
     }
 
@@ -45,7 +50,7 @@ class DrawerViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val drawerDatabase = DrawerDatabase.getInstance(context)
             val drawerDao = drawerDatabase.drawerDao()
-            val notifications = drawerDao.getAll()
+            val notifications = drawerDao.getAllVisible()
             for (noti in notifications)
                 noti.resetGPTValues()
             drawerDao.updateList(notifications)
@@ -54,7 +59,7 @@ class DrawerViewModel(
 
     // For testing
     val notiPostContent = MutableLiveData<String>()
-    fun getPostContent() {
+    fun getPostContent(includeContext: Boolean) {
 
         fun replaceChars(str: String): String {
             return str.replace("\n", " ").replace(",", " ")
@@ -64,11 +69,29 @@ class DrawerViewModel(
             val notifications = getNotifications(context)
             val sb = StringBuilder()
             notifications.forEach { noti ->
+
+                // First Line: App & Title (If title is consistent)
                 sb.append("[App] ${noti.appName}")
                 val titlesIdentical = noti.title.toSet().size == 1
                 if (titlesIdentical)
                     sb.append(" [Title] ${replaceChars(noti.title.last())}")
                 sb.append("\n")
+
+                // Optional: Include previous notifications
+                val prevThreadLength = minOf(noti.prevContent.size, noti.prevWhen.size, noti.prevPostTime.size)
+                if (includeContext && prevThreadLength > 0) {
+                    sb.append("[Context (Viewed Notifications)]\n")
+                    val notiPrevTime = if (noti.prevWhen.last() == 0L)
+                        noti.prevPostTime.takeLast(prevThreadLength)
+                    else
+                        noti.prevWhen.takeLast(prevThreadLength)
+                    val notiPrevContent = noti.prevContent.takeLast(prevThreadLength)
+                    for (i in 0..<prevThreadLength)
+                        sb.append("[Time] ${getDisplayTimeStr(notiPrevTime[i])} [Content] ${replaceChars(notiPrevContent[i])}\n")
+                    sb.append("[New Notifications (Focus Mainly on These)]\n")
+                }
+
+                // Second Line Onwards: Time, (Title, ) Content
                 val threadLength = if (titlesIdentical)
                     minOf(noti.content.size, noti.`when`.size, noti.postTime.size)
                 else

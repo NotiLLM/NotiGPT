@@ -1,34 +1,25 @@
 package org.muilab.notigpt.view.screen
 
 import android.content.Context
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import org.muilab.notigpt.view.component.AppBottomNavigation
-import org.muilab.notigpt.view.component.BottomNavItem
+import org.muilab.notigpt.view.component.TabContent
+import org.muilab.notigpt.view.component.TabLayout
+import org.muilab.notigpt.view.component.getTabList
 import org.muilab.notigpt.viewModel.DrawerViewModel
 import org.muilab.notigpt.viewModel.GPTViewModel
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(context: Context, drawerViewModel: DrawerViewModel, gptViewModel: GPTViewModel) {
-    val navController = rememberNavController()
-    Scaffold(
-        bottomBar = { AppBottomNavigation(navController = navController) }
-    ) { innerPadding ->
-        Box(modifier = Modifier.padding(innerPadding)) {
-            NavHost(navController, startDestination = BottomNavItem.Home.screen_route) {
-                composable(BottomNavItem.Home.screen_route) {
-                    HomeScreen(context, drawerViewModel, gptViewModel)
-                }
-                composable(BottomNavItem.Settings.screen_route) {
-                    SettingsScreen()
-                }
-            }
-        }
+    val tabData = getTabList()
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabData.size })
+    Column(modifier = Modifier.fillMaxSize()) {
+        TabLayout(tabData, pagerState)
+        TabContent(tabData, pagerState, context, drawerViewModel, gptViewModel)
     }
 }

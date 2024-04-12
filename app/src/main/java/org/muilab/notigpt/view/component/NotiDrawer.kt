@@ -2,10 +2,7 @@ package org.muilab.notigpt.view.component
 
 import android.content.Context
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -13,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.DismissDirection
 import androidx.compose.material.DismissState
 import androidx.compose.material.DismissValue
@@ -21,6 +19,8 @@ import androidx.compose.material.FractionalThreshold
 import androidx.compose.material.SwipeToDismiss
 import androidx.compose.material.rememberDismissState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -33,11 +33,20 @@ import org.muilab.notigpt.viewModel.DrawerViewModel
 @Composable
 fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
 
+    val listState = rememberLazyListState()
+    val isScrolledToTop = remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+        }
+    }
+
     val lazyPagingItems = drawerViewModel.allPaged.collectAsLazyPagingItems()
 
-    LazyColumn(modifier = Modifier
-        .fillMaxSize()
-        .padding(8.dp)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 16.dp, horizontal = 16.dp),
     ) {
         items(
             count = lazyPagingItems.itemCount,
@@ -64,16 +73,10 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
                     directions = setOf(DismissDirection.StartToEnd, DismissDirection.EndToStart),
                     dismissThresholds = { FractionalThreshold(0.9f) },
                     background = { Background(dismissState = dismissState) },
+                    modifier = Modifier.animateItemPlacement(tween(300)),
                     dismissContent = {
-                        AnimatedVisibility(
-                            visible = dismissState.currentValue != DismissValue.DismissedToEnd && dismissState.currentValue != DismissValue.DismissedToStart,
-                            exit = slideOutVertically() + fadeOut(),  // Customize this for smoother exit
-                        ) {
-                            Box(Modifier
-                                .animateItemPlacement(tween(durationMillis = 200))
-                                .fillMaxWidth()) {
-                                NotiCard(context, noti)
-                            }
+                        Box(Modifier.fillMaxWidth()) {
+                            NotiCard(context, noti, isScrolledToTop.value)
                         }
                     }
                 )

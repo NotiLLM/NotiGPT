@@ -16,7 +16,7 @@ import kotlin.math.abs
 fun getNotifications(context: Context): ArrayList<NotiUnit> = with(Dispatchers.IO) {
     val drawerDatabase = DrawerDatabase.getInstance(context)
     val drawerDao = drawerDatabase.drawerDao()
-    return drawerDao.getAll().toCollection(ArrayList())
+    return drawerDao.getAllVisible().toCollection(ArrayList())
 }
 
 fun getDisplayTimeStr(unixTime: Long, locale: Locale = Locale("zh", "TW")): String {

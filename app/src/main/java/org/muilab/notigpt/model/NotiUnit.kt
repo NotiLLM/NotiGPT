@@ -19,6 +19,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.room.Entity
 import androidx.room.TypeConverters
 import org.muilab.notigpt.service.NotiListenerService
+import org.muilab.notigpt.util.Constants
 import org.muilab.notigpt.util.getDisplayTimeStr
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -40,6 +41,7 @@ data class NotiUnit(
     var icon: String = "Unknown Icon",
     var largeIcon: String = "Unknown Icon",
     // Modifiable
+    var notiVisible: Boolean = true,
     var sortKey: String,
     var ranking: Int = -1,
     var gptCategory: String = "",
@@ -53,6 +55,11 @@ data class NotiUnit(
     val postTime: ArrayList<Long>,
     var title: ArrayList<String> = arrayListOf(),
     var content: ArrayList<String> = arrayListOf(),
+    // Previous Accumulatables
+    var prevWhen: ArrayList<Long> = arrayListOf(),
+    var prevPostTime: ArrayList<Long> = arrayListOf(),
+    var prevTitle: ArrayList<String> = arrayListOf(),
+    var prevContent: ArrayList<String> = arrayListOf(),
 ) {
 
     constructor(context: Context, sbn: StatusBarNotification, rankingMap: RankingMap): this(
@@ -68,7 +75,7 @@ data class NotiUnit(
         postTime = arrayListOf(sbn.postTime)
     ) {
         contentInit(context, sbn)
-        updateNoti(sbn, rankingMap)
+        updateNoti(context, sbn, rankingMap)
     }
 
     private fun contentInit(context: Context, sbn: StatusBarNotification) {
@@ -92,20 +99,32 @@ data class NotiUnit(
         } else {
             pkgName
         })
+    }
+
+    fun updateNoti(context: Context, sbn: StatusBarNotification, rankingMap: RankingMap, update: Boolean = false) {
+
+        // sort variables
+        sortKey = sbn.notification?.sortKey.toString()
+        ranking = rankingMap.orderedKeys.indexOf(sbn.key)
 
         // icon
+        val pm = context.packageManager
         icon = iconToBase64(context, pm, sbn.notification.smallIcon)
         val bigiconObject = sbn.notification.getLargeIcon()
         largeIcon = iconToBase64(context, pm, bigiconObject)
         if (largeIcon == "null")
             largeIcon = icon
-    }
 
-    fun updateNoti(sbn: StatusBarNotification, rankingMap: RankingMap, update: Boolean = false) {
+        // save pending intent
+        val pendingIntent = sbn.notification?.contentIntent
+        if (sbn.notification?.contentIntent != null)
+            NotiListenerService.pendingIntents[sbnKey] = pendingIntent as PendingIntent
 
-        // sort variables
-        sortKey = sbn.notification?.sortKey.toString()
-        ranking = rankingMap.orderedKeys.indexOf(sbn.key)
+        // title
+        val notiTitle = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE).toString()
+        if (!update)
+            title.clear()
+        title.add(notiTitle)
 
         // time
         if (!update)
@@ -115,30 +134,19 @@ data class NotiUnit(
             postTime.clear()
         postTime.add(sbn.postTime)
 
-        // title
-        val notiTitle = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE).toString()
-        if (!update)
-            title.clear()
-        title.add(notiTitle)
-
         // content
         var notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
-        if (notiContent == "null")
+        if (notiContent == "null" || notiContent.isBlank())
             notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_TEXT).toString()
-        if (notiContent == "null")
+        if (notiContent == "null" || notiContent.isBlank())
             notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT).toString()
-        if (notiContent == "null")
+        if (notiContent == "null" || notiContent.isBlank())
             notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_INFO_TEXT).toString()
-        if (notiContent == "null")
+        if (notiContent == "null" || notiContent.isBlank())
             notiContent = sbn.notification?.extras?.getCharSequence(Notification.EXTRA_SUB_TEXT).toString()
         if (!update)
             content.clear()
         content.add(notiContent)
-
-        // save pending intent
-        val pendingIntent = sbn.notification?.contentIntent
-        if (sbn.notification?.contentIntent != null)
-            NotiListenerService.pendingIntents[sbnKey] = pendingIntent as PendingIntent
     }
 
     private fun iconToBitmap(context: Context, icon: Icon): Bitmap? {
@@ -214,5 +222,56 @@ data class NotiUnit(
         scoreTime = 10.0
         scoreSender = 10.0
         scoreContent = 10.0
+    }
+
+    fun hideNoti() {
+        prevWhen.addAll(`when`)
+        `when`.clear()
+        prevPostTime.addAll(postTime)
+        postTime.clear()
+        prevTitle.addAll(title)
+        title.clear()
+        prevContent.addAll(content)
+        content.clear()
+        notiVisible = false
+    }
+
+    fun isVisible(): Boolean {
+        return notiVisible
+    }
+
+    fun makeVisible(keepHistory: Boolean) {
+        notiVisible = true
+        if (keepHistory) {
+            keepHistoryByCount(Constants.HISTORY_NOTI_COUNT_THRESHOLD)
+            dropHistoryByTime(Constants.HISTORY_NOTI_TIME_THRESHOLD)
+        } else
+            deleteHistory()
+    }
+
+    fun deleteHistory() {
+        prevWhen.clear()
+        prevPostTime.clear()
+        prevTitle.clear()
+        prevContent.clear()
+    }
+
+    private fun keepHistoryByCount(count: Int) {
+        prevWhen = prevWhen.takeLast(count).toCollection(ArrayList())
+        prevPostTime = prevPostTime.takeLast(count).toCollection(ArrayList())
+        prevTitle = prevTitle.takeLast(count).toCollection(ArrayList())
+        prevContent = prevContent.takeLast(count).toCollection(ArrayList())
+    }
+
+    private fun dropHistoryByTime(timeThreshold: Long) {
+        val currentTime = System.currentTimeMillis()
+        val dropCount = if (prevWhen.last() != 0L)
+            prevWhen.indexOfFirst { currentTime - it < timeThreshold}
+        else
+            prevPostTime.indexOfFirst { currentTime - it < timeThreshold}
+        prevWhen.drop(dropCount)
+        prevPostTime.drop(dropCount)
+        prevTitle.drop(dropCount)
+        prevContent.drop(dropCount)
     }
 }

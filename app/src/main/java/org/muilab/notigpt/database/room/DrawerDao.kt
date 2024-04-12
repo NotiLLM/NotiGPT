@@ -11,11 +11,11 @@ import org.muilab.notigpt.model.NotiUnit
 @Dao
 interface DrawerDao {
 
-    @Query("SELECT * FROM noti_drawer ORDER BY score DESC, ranking")
-    fun getAll(): List<NotiUnit>
+    @Query("SELECT * FROM noti_drawer WHERE notiVisible = 1 ORDER BY score DESC, ranking")
+    fun getAllVisible(): List<NotiUnit>
 
-    @Query("SELECT * FROM noti_drawer ORDER BY score DESC, ranking")
-    fun getAllPaged(): PagingSource<Int, NotiUnit>
+    @Query("SELECT * FROM noti_drawer WHERE notiVisible = 1 ORDER BY score DESC, ranking")
+    fun getAllVisiblePaged(): PagingSource<Int, NotiUnit>
 
     @Query("SELECT * FROM noti_drawer WHERE sbnKey = :sbnKey")
     fun getBySbnKey(sbnKey: String): List<NotiUnit>

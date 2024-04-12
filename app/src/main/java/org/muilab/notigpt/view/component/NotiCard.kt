@@ -51,16 +51,17 @@ import org.muilab.notigpt.util.getDisplayTimeStr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotiCard(context: Context, notiUnit: NotiUnit) {
+fun NotiCard(context: Context, notiUnit: NotiUnit, isScrolledToTop: Boolean) {
     val bitmap = notiUnit.getBitmap()
     val largeBitmap = notiUnit.getLargeBitmap()
+    val emergencyRed = Color(145, 25, 17)
     val GRADIENT_TOP = 27
-    val GRADIENT_BOTTOM = 20
+    val GRADIENT_BOTTOM = 18
     val gradientColor = when {
-        notiUnit.score > GRADIENT_TOP -> Color(145, 25, 17)
+        notiUnit.score > GRADIENT_TOP -> emergencyRed
         notiUnit.score > GRADIENT_BOTTOM -> lerp(
             MaterialTheme.colorScheme.surfaceVariant,
-            Color(145, 25, 17),
+            emergencyRed,
             ((notiUnit.score - GRADIENT_BOTTOM) / (GRADIENT_TOP - GRADIENT_BOTTOM)).toFloat()
         )
         else -> MaterialTheme.colorScheme.surfaceVariant
@@ -70,6 +71,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
     var collapsed by remember { mutableStateOf(true) }
     var maxContentHeight by remember { mutableFloatStateOf(0f) }
     var requiresExpansion by remember { mutableStateOf(notiUnit.content.size > 1) }
+    var allowDragAnywhere by remember { mutableStateOf(true) }
 
     val coroutineScope = rememberCoroutineScope()
     val draggableState = rememberDraggableState { delta ->
@@ -86,8 +88,22 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
     Card(
         modifier = Modifier
             .padding(vertical = 1.dp)
-            .fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
+            .fillMaxWidth()
+            .let { modifier ->
+                 if (isScrolledToTop && requiresExpansion && allowDragAnywhere)
+                     modifier.draggable(
+                         state = draggableState,
+                         orientation = Orientation.Vertical,
+                         onDragStopped = { velocity ->
+                             expansionProgress = if (velocity > 0) 1f else 0F
+                             if (expansionProgress == 1f)
+                                 allowDragAnywhere = false
+                         }
+                     )
+                else
+                    modifier
+            },
+        shape = MaterialTheme.shapes.large,
         onClick = { NotiListenerService.getPendingIntent(context, notiUnit)?.send() },
         colors = CardDefaults.cardColors(
             containerColor = gradientColor
@@ -96,7 +112,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 2.dp)
+                .padding(vertical = 5.dp)
         ) {
             Spacer(modifier = Modifier.size(5.dp))
             if (bitmap != null)
@@ -162,10 +178,11 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                 ScoreDisplay(notiUnit)
 
                             Row {
+                                val notiTitle = notiUnit.title.last()
                                 Text(
                                     modifier = Modifier
                                         .background(Color.Transparent),
-                                    text = notiUnit.title.last(),
+                                    text = if (notiTitle == "null") "" else notiTitle,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -177,9 +194,10 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                 )
                                 if (expansionProgress == 0f) {
                                     Spacer(Modifier.padding(5.dp))
+                                    val notiContent = notiUnit.content.last()
                                     Text(
                                         modifier = Modifier.background(Color.Transparent),
-                                        text = notiUnit.content.last(),
+                                        text = if (notiContent == "null") "" else notiContent,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         onTextLayout = { textLayoutResult ->
@@ -200,11 +218,15 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
                                 orientation = Orientation.Vertical,
                                 onDragStopped = { velocity ->
                                     expansionProgress = if (velocity > 0) 1f else 0F
+                                    if (expansionProgress == 0f)
+                                        allowDragAnywhere = true
                                 }
                             )
                             .clickable {
                                 expansionProgress =
                                     if (expansionProgress > 0f) 0f else 1F
+                                if (expansionProgress == 0f)
+                                    allowDragAnywhere = true
                             }
                     ) {
                         Text(text = notiUnit.getLastTime(), fontSize = 14.sp)
@@ -237,19 +259,20 @@ fun NotiCard(context: Context, notiUnit: NotiUnit) {
 
                             Column {
 
-                                val notiContents = notiUnit.content
-                                val notiTimes = if (notiUnit.`when`.last() != 0L)
+                                var notiContents = notiUnit.content
+                                var notiTimes = if (notiUnit.`when`.last() != 0L)
                                     notiUnit.`when`
                                 else
                                     notiUnit.postTime
-                                notiContents.zip(notiTimes).forEach { (notiContent, notiTime) ->
+                                val expandLength = minOf(notiContents.size, notiTimes.size)
+                                notiContents.reversed().zip(notiTimes.reversed()).reversed().forEach { (notiContent, notiTime) ->
                                     Row(Modifier.fillMaxWidth()) {
                                         Text(
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .padding(start = 5.dp)
                                                 .background(Color.Transparent),
-                                            text = notiContent,
+                                            text = if (notiContent == "null") "" else notiContent,
                                             style = MaterialTheme.typography.bodySmall.copy(
                                                 fontSize = 14.sp
                                             )

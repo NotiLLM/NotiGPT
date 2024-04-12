@@ -45,33 +45,38 @@ fun HomeScreen(context: Context, drawerViewModel: DrawerViewModel, gptViewModel:
                 Modifier.wrapContentHeight().fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround
             ) {
+//                Button(onClick = {
+//                    Toast.makeText(context, "Start Summarizing", Toast.LENGTH_SHORT).show()
+//                    gptViewModel.summarizeNotis()
+//                }) {
+//                    Text("Summarize")
+//                }
+//                Button(onClick = {
+//                    Toast.makeText(context, "Start Sorting", Toast.LENGTH_SHORT).show()
+//                    gptViewModel.sortNotis()
+//                }) {
+//                    Text("Sort")
+//                }
+//                Button(onClick = {
+//                    Toast.makeText(context, "Start Categorizing", Toast.LENGTH_SHORT).show()
+//                    gptViewModel.getCategories()
+//                }) {
+//                    Text("Classify")
+//                }
+//                Button(onClick = {
+//                    Toast.makeText(context, "Work In Progress", Toast.LENGTH_SHORT).show()
+//                }) {
+//                    Text("Extract Tasks")
+//                }
                 Button(onClick = {
-                    Toast.makeText(context, "Start Summarizing", Toast.LENGTH_SHORT).show()
-                    gptViewModel.summarizeNotis()
+                    drawerViewModel.getPostContent(true)
                 }) {
-                    Text("Summarize")
+                    Text("Copy Data with History")
                 }
                 Button(onClick = {
-                    Toast.makeText(context, "Start Sorting", Toast.LENGTH_SHORT).show()
-                    gptViewModel.sortNotis()
+                    drawerViewModel.getPostContent(false)
                 }) {
-                    Text("Sort")
-                }
-                Button(onClick = {
-                    Toast.makeText(context, "Start Categorizing", Toast.LENGTH_SHORT).show()
-                    gptViewModel.getCategories()
-                }) {
-                    Text("Classify")
-                }
-                Button(onClick = {
-                    Toast.makeText(context, "Work In Progress", Toast.LENGTH_SHORT).show()
-                }) {
-                    Text("Extract Tasks")
-                }
-                Button(onClick = {
-                    drawerViewModel.getPostContent()
-                }) {
-                    Text("Copy")
+                    Text("Copy Data")
                 }
                 Button(onClick = {
                     drawerViewModel.resetGPTValues()

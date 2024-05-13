@@ -19,6 +19,16 @@ fun getNotifications(context: Context): ArrayList<NotiUnit> = with(Dispatchers.I
     return drawerDao.getAllVisible().toCollection(ArrayList())
 }
 
+fun getViewedNotifications(context: Context): ArrayList<NotiUnit> = with(Dispatchers.IO) {
+    val drawerDatabase = DrawerDatabase.getInstance(context)
+    val drawerDao = drawerDatabase.drawerDao()
+    return drawerDao.getAllVisible().toCollection(ArrayList())
+}
+
+fun replaceChars(str: String): String {
+    return str.replace("\n", " ").replace(",", " ")
+}
+
 fun getDisplayTimeStr(unixTime: Long, locale: Locale = Locale("zh", "TW")): String {
     val now = System.currentTimeMillis()
     val diffInMillis = now - unixTime

@@ -52,10 +52,10 @@ android {
 
 dependencies {
 
-    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation(platform("androidx.compose:compose-bom:2024.04.00"))
+    implementation("androidx.activity:activity-compose:1.9.0")
+    implementation(platform("androidx.compose:compose-bom:2024.05.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
@@ -65,7 +65,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2024.04.00"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.05.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
@@ -79,11 +79,11 @@ dependencies {
     // Paging
     val pagingVersion = "3.2.1"
     implementation("androidx.paging:paging-runtime-ktx:$pagingVersion")
-    implementation("androidx.paging:paging-compose:3.3.0-beta01")
+    implementation("androidx.paging:paging-compose:3.3.0-rc01")
 
     // OpenAI
-    val ktorVersion = "2.3.7"
-    implementation("com.aallam.openai:openai-client:3.6.2")
+    val ktorVersion = "2.3.11"
+    implementation("com.aallam.openai:openai-client:3.7.2")
     implementation("io.ktor:ktor-client-android:$ktorVersion")
 
     // dotenv
@@ -95,4 +95,11 @@ dependencies {
     // Navigation
     val navVersion = "2.7.7"
     implementation("androidx.navigation:navigation-compose:$navVersion")
+
+    // TODO: LazyColumn Scroll-Bar
+    implementation("com.github.nanihadesuka:LazyColumnScrollbar:2.0.7")
+
+    implementation("com.google.code.gson:gson:2.10.1")
+
+    implementation("com.google.mlkit:entity-extraction:16.0.0-beta5")
 }

@@ -70,20 +70,15 @@ class GPTViewModel(application: Application) : AndroidViewModel(application) {
                 val updateNotis = mutableListOf<NotiUnit>()
                 for (notiCategory in notiCategories) {
                     val segments = notiCategory.trim().split(" ")
-                    if (segments.size == 4) {
+                    if (segments.size == 2) {
                         try {
                             val hashKey = segments[0].toInt()
-                            val newScoreTime = segments[1].toDouble()
-                            val newScoreSender = segments[2].toDouble()
-                            val newScoreContent = segments[3].toDouble()
+                            val newScore = segments[1].toDouble()
                             val existingNoti = drawerDao.getByHashKey(hashKey)
                             if (existingNoti.isNotEmpty())
                                 updateNotis.add(
                                     existingNoti[0].copy(
-                                        score = newScoreTime + newScoreSender + newScoreContent,
-                                        scoreTime = newScoreTime,
-                                        scoreSender = newScoreSender,
-                                        scoreContent = newScoreContent
+                                        score = newScore
                                     )
                                 )
                         } catch (e: Exception) {

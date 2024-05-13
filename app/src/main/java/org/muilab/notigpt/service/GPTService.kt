@@ -75,52 +75,55 @@ class GPTService: Service() {
 
     private fun getPostContent(notifications: ArrayList<NotiUnit>): ArrayList<String> {
 
-        fun replaceChars(str: String): String {
-            return str.replace("\n", " ").replace(",", " ")
-        }
-
         val notiChunks = arrayListOf<String>()
 
         val chunkSb = StringBuilder()
         val notiSb = StringBuilder()
         notifications.forEach { noti ->
 
-            notiSb.append("[notiKey] ${noti.hashKey} [App] ${noti.appName}")
-            val titlesIdentical = noti.title.toSet().size == 1
-            if (titlesIdentical)
-                notiSb.append(" [Title] ${replaceChars(noti.title.last())}")
-            notiSb.append("\n")
+            notiSb.append("<whole_noti>\n\n")
 
-            val prevThreadLength = minOf(noti.prevContent.size, noti.prevWhen.size, noti.prevPostTime.size)
-            if (prevThreadLength > 0) {
-                notiSb.append("[Context (Viewed Notifications)]\n")
-                val notiPrevTime = if (noti.prevWhen.last() == 0L)
-                    noti.prevPostTime.takeLast(prevThreadLength)
-                else
-                    noti.prevWhen.takeLast(prevThreadLength)
-                val notiPrevContent = noti.prevContent.takeLast(prevThreadLength)
-                for (i in 0..<prevThreadLength)
-                    notiSb.append("[Time] ${getDisplayTimeStr(notiPrevTime[i])} [Content] ${replaceChars(notiPrevContent[i])}\n")
-                notiSb.append("[New Notifications (Focus Mainly on These)]\n")
+            notiSb.append("<id>${noti.hashKey}</id>\n")
+            // First Line: App & Title (If title is consistent)
+            notiSb.append("<app>${noti.appName}</app>\n")
+
+            val titlesIdentical = (noti.notiInfos + noti.prevNotiInfos)
+                .map { it.title }
+                .filter { it.isNotBlank() }
+                .toSet().size == 1
+            val notiType = if (noti.isPeople) "message" else "info"
+            val notiTypeTitle = if (noti.isPeople) "sender" else "title"
+
+            notiSb.append("<overall_$notiTypeTitle>${org.muilab.notigpt.util.replaceChars(noti.title)}</overall_$notiTypeTitle>\n\n")
+
+            val prevNotiInfos = noti.prevNotiInfos
+            if (prevNotiInfos.size > 0) {
+                notiSb.append("<previous_${notiType}s\n")
+                prevNotiInfos.forEach {
+                    notiSb.append("<$notiType>\n")
+                    notiSb.append("<time>${getDisplayTimeStr(it.time)}</time>")
+                    if (!titlesIdentical)
+                        notiSb.append("<$notiTypeTitle>${org.muilab.notigpt.util.replaceChars(it.title)}</$notiTypeTitle>")
+                    notiSb.append("<content>${org.muilab.notigpt.util.replaceChars(it.content)}</content>\n")
+                    notiSb.append("<$notiType>\n")
+                }
+                notiSb.append("</previous_${notiType}s>\n\n")
+                notiSb.append("<new_${notiType}s>\n")
             }
 
-            val threadLength = if (titlesIdentical)
-                minOf(noti.content.size, noti.`when`.size, noti.postTime.size)
-            else
-                minOf(noti.title.size, noti.content.size, noti.`when`.size, noti.postTime.size)
-            val notiTitle = noti.title.takeLast(threadLength)
-            val notiContent = noti.content.takeLast(threadLength)
-            val notiTime = if (noti.`when`.last() == 0L)
-                noti.postTime.takeLast(threadLength)
-            else
-                noti.`when`.takeLast(threadLength)
-            if (titlesIdentical)
-                for (i in 0..<threadLength)
-                    notiSb.append("[Time] ${getDisplayTimeStr(notiTime[i])} [Content] ${replaceChars(notiContent[i])}\n")
-            else
-                for (i in 0..<threadLength)
-                    notiSb.append("[Time] ${getDisplayTimeStr(notiTime[i])} [Title] ${replaceChars(notiTitle[i])} [Content] ${replaceChars(notiContent[i])}\n")
-            notiSb.append("\n")
+            val notiInfos = noti.notiInfos
+
+            notiInfos.forEach {
+                notiSb.append("<$notiType>\n")
+                notiSb.append("<time>${getDisplayTimeStr(it.time)}</time>")
+                if (!titlesIdentical)
+                    notiSb.append("<$notiTypeTitle>${org.muilab.notigpt.util.replaceChars(it.title)}</$notiTypeTitle>")
+                notiSb.append("<content>${org.muilab.notigpt.util.replaceChars(it.content)}</content>\n")
+                notiSb.append("<$notiType>\n")
+            }
+            if (prevNotiInfos.size > 0)
+                notiSb.append("</new_${notiType}s>\n")
+            notiSb.append("\n</whole_noti>\n\n\n")
 
             if (chunkSb.length + notiSb.length > MAX_TOKEN) {
                 notiChunks.add(chunkSb.toString())
@@ -139,7 +142,6 @@ class GPTService: Service() {
 
         return withContext(Dispatchers.IO) {
 
-            var finalResponse: String = ""
             val notifications = getNotifications(applicationContext)
             val notiChunks = getPostContent(notifications)
 
@@ -211,7 +213,7 @@ class GPTService: Service() {
 
                 deferredResults.add(deferred)
             }
-            finalResponse = deferredResults.awaitAll().joinToString(separator = "\n")
+            val finalResponse = deferredResults.awaitAll().joinToString(separator = "\n")
             finalResponse
         }
     }

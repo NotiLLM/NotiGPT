@@ -3,7 +3,10 @@ package org.muilab.notigpt.viewModel
 import android.annotation.SuppressLint
 import android.app.Application
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
@@ -15,6 +18,8 @@ import org.muilab.notigpt.model.NotiUnit
 import org.muilab.notigpt.paging.NotiRepository
 import org.muilab.notigpt.util.getDisplayTimeStr
 import org.muilab.notigpt.util.getNotifications
+import org.muilab.notigpt.util.postOngoingNotification
+import org.muilab.notigpt.util.replaceChars
 
 class DrawerViewModel(
     application: Application,
@@ -22,27 +27,58 @@ class DrawerViewModel(
 ) : AndroidViewModel(application) {
     val allPaged: Flow<PagingData<NotiUnit>> = notiRepository.getAllPaged()
 
-    @SuppressLint("StaticFieldLeak")
-    val context: Context = getApplication<Application>().applicationContext
-
-    fun deleteNoti(notiUnit: NotiUnit) {
+    fun getPinnedCount(): LiveData<Int> {
+        val liveData = MutableLiveData<Int>()
         viewModelScope.launch(Dispatchers.IO) {
             val drawerDatabase = DrawerDatabase.getInstance(context)
             val drawerDao = drawerDatabase.drawerDao()
-            // drawerDao.deleteBySbnKey(notiUnit.sbnKey)
+            val notiPinnedSeenCount = drawerDao.getNotiPinnedSeenCount()
+            liveData.postValue(notiPinnedSeenCount)
+        }
+        return liveData
+    }
+
+    fun getNotSeenCount(): LiveData<Int> {
+        val liveData = MutableLiveData<Int>()
+        viewModelScope.launch(Dispatchers.IO) {
+            val drawerDatabase = DrawerDatabase.getInstance(context)
+            val drawerDao = drawerDatabase.drawerDao()
+            val notiNotSeenCount = drawerDao.getNotiNotSeenCount()
+            liveData.postValue(notiNotSeenCount)
+        }
+        return liveData
+    }
+
+    @SuppressLint("StaticFieldLeak")
+    val context: Context = getApplication<Application>().applicationContext
+
+    @RequiresApi(Build.VERSION_CODES.S)
+    fun actOnNoti(notiUnit: NotiUnit, action: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val drawerDatabase = DrawerDatabase.getInstance(context)
+            val drawerDao = drawerDatabase.drawerDao()
             val existingNoti = drawerDao.getBySbnKey(notiUnit.sbnKey)
             if (existingNoti.isNotEmpty()) {
-                existingNoti[0].hideNoti()
+                when (action) {
+                    "swipe_dismiss" -> existingNoti[0].hideNoti()
+                    "click_dismiss" -> existingNoti[0].hideNoti()
+                    "pin" -> existingNoti[0].flipNotiPin()
+                }
                 drawerDao.update(existingNoti[0])
+            }
+            if (action.contains("dismiss")) {
+                postOngoingNotification(context)
             }
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     fun deleteAllNotis() {
         viewModelScope.launch(Dispatchers.IO) {
             val drawerDatabase = DrawerDatabase.getInstance(context)
             val drawerDao = drawerDatabase.drawerDao()
-            drawerDao.deleteAll()
+            drawerDao.deleteAllNotPinned()
+            postOngoingNotification(context)
         }
     }
 
@@ -61,54 +97,57 @@ class DrawerViewModel(
     val notiPostContent = MutableLiveData<String>()
     fun getPostContent(includeContext: Boolean) {
 
-        fun replaceChars(str: String): String {
-            return str.replace("\n", " ").replace(",", " ")
-        }
-
         viewModelScope.launch(Dispatchers.IO) {
             val notifications = getNotifications(context)
             val sb = StringBuilder()
             notifications.forEach { noti ->
 
+                sb.append("<whole_noti>\n\n")
+
+                sb.append("<id>${noti.hashKey}</id>\n")
                 // First Line: App & Title (If title is consistent)
-                sb.append("[App] ${noti.appName}")
-                val titlesIdentical = noti.title.toSet().size == 1
-                if (titlesIdentical)
-                    sb.append(" [Title] ${replaceChars(noti.title.last())}")
-                sb.append("\n")
+                sb.append("<app>${noti.appName}</app>\n")
+
+                val titlesIdentical = (noti.notiInfos + noti.prevNotiInfos)
+                    .map { it.title }
+                    .filter { it.isNotBlank() }
+                    .toSet().size == 1
+                val notiType = if (noti.isPeople) "message" else "info"
+                val notiTypeTitle = if (noti.isPeople) "sender" else "title"
+
+                sb.append("<overall_$notiTypeTitle>${replaceChars(noti.title)}</overall_$notiTypeTitle>\n\n")
 
                 // Optional: Include previous notifications
-                val prevThreadLength = minOf(noti.prevContent.size, noti.prevWhen.size, noti.prevPostTime.size)
-                if (includeContext && prevThreadLength > 0) {
-                    sb.append("[Context (Viewed Notifications)]\n")
-                    val notiPrevTime = if (noti.prevWhen.last() == 0L)
-                        noti.prevPostTime.takeLast(prevThreadLength)
-                    else
-                        noti.prevWhen.takeLast(prevThreadLength)
-                    val notiPrevContent = noti.prevContent.takeLast(prevThreadLength)
-                    for (i in 0..<prevThreadLength)
-                        sb.append("[Time] ${getDisplayTimeStr(notiPrevTime[i])} [Content] ${replaceChars(notiPrevContent[i])}\n")
-                    sb.append("[New Notifications (Focus Mainly on These)]\n")
+                val prevNotiInfos = noti.prevNotiInfos
+
+                if (includeContext && prevNotiInfos.size > 0) {
+                    sb.append("<previous_${notiType}s\n")
+                    prevNotiInfos.forEach {
+                        sb.append("<$notiType>\n")
+                        sb.append("<time>${getDisplayTimeStr(it.time)}</time>")
+                        if (!titlesIdentical)
+                            sb.append("<$notiTypeTitle>${replaceChars(it.title)}</$notiTypeTitle>")
+                        sb.append("<content>${replaceChars(it.content)}</content>\n")
+                        sb.append("<$notiType>\n")
+                    }
+                    sb.append("</previous_${notiType}s>\n\n")
+                    sb.append("<new_${notiType}s>\n")
                 }
 
                 // Second Line Onwards: Time, (Title, ) Content
-                val threadLength = if (titlesIdentical)
-                    minOf(noti.content.size, noti.`when`.size, noti.postTime.size)
-                else
-                    minOf(noti.title.size, noti.content.size, noti.`when`.size, noti.postTime.size)
-                val notiTitle = noti.title.takeLast(threadLength)
-                val notiContent = noti.content.takeLast(threadLength)
-                val notiTime = if (noti.`when`.last() == 0L)
-                    noti.postTime.takeLast(threadLength)
-                else
-                    noti.`when`.takeLast(threadLength)
-                if (titlesIdentical)
-                    for (i in 0..<threadLength)
-                        sb.append("[Time] ${getDisplayTimeStr(notiTime[i])} [Content] ${replaceChars(notiContent[i])}\n")
-                    else
-                        for (i in 0..<threadLength)
-                            sb.append("[Time] ${getDisplayTimeStr(notiTime[i])} [Title] ${replaceChars(notiTitle[i])} [Content] ${replaceChars(notiContent[i])}\n")
-                sb.append("\n")
+                val notiInfos = noti.notiInfos
+
+                notiInfos.forEach {
+                    sb.append("<$notiType>\n")
+                    sb.append("<time>${getDisplayTimeStr(it.time)}</time>")
+                    if (!titlesIdentical)
+                        sb.append("<$notiTypeTitle>${replaceChars(it.title)}</$notiTypeTitle>")
+                    sb.append("<content>${replaceChars(it.content)}</content>\n")
+                    sb.append("<$notiType>\n")
+                }
+                if (includeContext && prevNotiInfos.size > 0)
+                    sb.append("</new_${notiType}s>\n")
+                sb.append("\n</whole_noti>\n\n\n")
             }
             notiPostContent.postValue(sb.toString())
         }

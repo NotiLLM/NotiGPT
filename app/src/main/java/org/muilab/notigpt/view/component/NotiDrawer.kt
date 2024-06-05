@@ -32,7 +32,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,21 +67,7 @@ import kotlin.math.roundToInt
 fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
 
     val listState = rememberLazyListState()
-    val pinnedCountLiveData = remember { drawerViewModel.getPinnedCount() }
-    val pinnedCount by pinnedCountLiveData.observeAsState()
-    val notSeenCountLiveData = remember { drawerViewModel.getNotSeenCount() }
-    val notSeenCount by notSeenCountLiveData.observeAsState()
     val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(pinnedCount, notSeenCount) {
-        if (pinnedCount != null && notSeenCount != null) {
-            coroutineScope.launch {
-                if (notSeenCount!! > 0)
-                    listState.scrollToItem(pinnedCount!!, -64)
-            }
-        }
-    }
-
 
     val isScrolledToTop = remember {
         derivedStateOf {
@@ -239,33 +224,30 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
         }
     }
 
-    if (pinnedCount != null && pinnedCount!! > 0) {
+    val notiCount =  listState.firstVisibleItemIndex
+    + if (listState.firstVisibleItemScrollOffset > 0) 1 else 0
 
-        val notiCount =  listState.firstVisibleItemIndex
-        + if (listState.firstVisibleItemScrollOffset > 0) 1 else 0
-
-        if (notiCount > 0 && listState.firstVisibleItemIndex > 0) {
-            ElevatedButton(
-                onClick = {
-                    coroutineScope.launch {
-                        listState.scrollToItem(0)
-                    }
-                },
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface),
-                modifier = Modifier.padding(4.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.reach_top),
-                    "Reach Top",
-                    Modifier
-                        .size(25.dp)
-                )
-                Spacer(Modifier.size(8.dp))
-                Text(
-                    "${minOf(notiCount, pinnedCount!!)} pinned notifications above",
-                    textAlign = TextAlign.Center
-                )
-            }
+    if (notiCount > 0 && listState.firstVisibleItemIndex > 0) {
+        ElevatedButton(
+            onClick = {
+                coroutineScope.launch {
+                    listState.scrollToItem(0)
+                }
+            },
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface),
+            modifier = Modifier.padding(4.dp)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.reach_top),
+                "Reach Top",
+                Modifier
+                    .size(25.dp)
+            )
+            Spacer(Modifier.size(8.dp))
+            Text(
+                "$notiCount notifications above",
+                textAlign = TextAlign.Center
+            )
         }
     }
 

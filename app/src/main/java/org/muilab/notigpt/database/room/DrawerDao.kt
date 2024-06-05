@@ -24,10 +24,14 @@ interface DrawerDao {
         SELECT * FROM noti_drawer WHERE notiVisible = 1 
         ORDER BY 
             CASE 
+                /* old logic
                 WHEN pinned = 1 AND notiSeen = 1 THEN 1
                 WHEN pinned = 1 AND notiSeen = 0 THEN 2
                 WHEN pinned = 0 AND notiSeen = 0 THEN 3
                 WHEN pinned = 0 AND notiSeen = 1 THEN 4
+                */
+                WHEN notiSeen = 0 THEN 1
+                WHEN notiSeen = 1 THEN 2
             END,
             score DESC,
             importance DESC,
@@ -39,10 +43,14 @@ interface DrawerDao {
         SELECT * FROM noti_drawer WHERE notiVisible = 1 
         ORDER BY 
             CASE 
+                /* old logic
                 WHEN pinned = 1 AND notiSeen = 1 THEN 1
                 WHEN pinned = 1 AND notiSeen = 0 THEN 2
                 WHEN pinned = 0 AND notiSeen = 0 THEN 3
                 WHEN pinned = 0 AND notiSeen = 1 THEN 4
+                */
+                WHEN notiSeen = 0 THEN 1
+                WHEN notiSeen = 1 THEN 2
             END,
             score DESC,
             importance DESC,

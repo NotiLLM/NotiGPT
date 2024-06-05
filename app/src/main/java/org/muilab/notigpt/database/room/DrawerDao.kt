@@ -1,5 +1,6 @@
 package org.muilab.notigpt.database.room
 
+import androidx.lifecycle.LiveData
 import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
@@ -15,7 +16,7 @@ interface DrawerDao {
     fun getAllNotiCount(): Int
 
     @Query("SELECT COUNT(*) FROM noti_drawer WHERE notiVisible = 1 AND notiSeen = 0")
-    fun getNotiNotSeenCount(): Int
+    fun getNotiNotSeenCount(): LiveData<Int>
 
     @Query("SELECT COUNT(*) FROM noti_drawer WHERE notiVisible = 1 AND notiSeen = 1 AND pinned = 1")
     fun getNotiPinnedSeenCount(): Int
@@ -61,7 +62,7 @@ interface DrawerDao {
     @Query(
         """
         SELECT * FROM noti_drawer WHERE notiVisible = 1 AND notiSeen = 0
-        ORDER BY isPeople DESC, importance DESC, LENGTH(notiInfos) DESC, latestTime DESC
+        ORDER BY latestTime DESC
     """
     )
     fun getnotReadNotis(): List<NotiUnit>
@@ -69,7 +70,7 @@ interface DrawerDao {
     @Query(
         """
         SELECT * FROM noti_drawer WHERE notiVisible = 1 AND isPeople = 1
-        ORDER BY appName, isPeople DESC, importance DESC, LENGTH(notiInfos) DESC, latestTime DESC
+        ORDER BY latestTime DESC
     """
     )
     fun getNotiWithSenders(): List<NotiUnit>

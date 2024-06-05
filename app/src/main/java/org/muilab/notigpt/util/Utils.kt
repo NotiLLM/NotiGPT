@@ -1,6 +1,7 @@
 package org.muilab.notigpt.util
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.icu.text.RelativeDateTimeFormatter
 import android.icu.util.ULocale
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +29,19 @@ fun getViewedNotifications(context: Context): ArrayList<NotiUnit> = with(Dispatc
 fun replaceChars(str: String): String {
     return str.replace("\n", " ").replace(",", " ")
 }
+
+fun hasTransparentPixels(bitmap: Bitmap, threshold: Float): Boolean {
+    var bitCount: Int = 0
+    for (x in 0 until bitmap.width) {
+        for (y in 0 until bitmap.height) {
+            val pixel = bitmap.getPixel(x, y)
+            bitCount += if (pixel shr 24 == 0) 1 else 0
+        }
+    }
+    val ratio = bitCount / bitmap.width / bitmap.height
+    return minOf(ratio, 1 - ratio) > threshold
+}
+
 
 fun getDisplayTimeStr(unixTime: Long, locale: Locale = Locale("zh", "TW")): String {
     val now = System.currentTimeMillis()

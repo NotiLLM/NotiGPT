@@ -8,7 +8,6 @@ import android.content.ServiceConnection
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -63,12 +62,9 @@ class MainActivity : ComponentActivity() {
         val gptServiceIntent = Intent(this, GPTService::class.java)
         if (!isServiceRunning(this, GPTService::class.java)) {
             startService(gptServiceIntent)
-            Log.d("GPTService", "Connected")
         }
-        Log.d("GPTService", "To Bind")
         bindService(gptServiceIntent, gptServiceConnection, Context.BIND_AUTO_CREATE)
 
-        Log.d("GPTService", "Binded")
         setContent {
             NotiTaskTheme {
                 // A surface container using the 'background' color from the theme

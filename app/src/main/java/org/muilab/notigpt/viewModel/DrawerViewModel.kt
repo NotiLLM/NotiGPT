@@ -26,28 +26,7 @@ class DrawerViewModel(
     notiRepository: NotiRepository
 ) : AndroidViewModel(application) {
     val allPaged: Flow<PagingData<NotiUnit>> = notiRepository.getAllPaged()
-
-    fun getPinnedCount(): LiveData<Int> {
-        val liveData = MutableLiveData<Int>()
-        viewModelScope.launch(Dispatchers.IO) {
-            val drawerDatabase = DrawerDatabase.getInstance(context)
-            val drawerDao = drawerDatabase.drawerDao()
-            val notiPinnedSeenCount = drawerDao.getNotiPinnedSeenCount()
-            liveData.postValue(notiPinnedSeenCount)
-        }
-        return liveData
-    }
-
-    fun getNotSeenCount(): LiveData<Int> {
-        val liveData = MutableLiveData<Int>()
-        viewModelScope.launch(Dispatchers.IO) {
-            val drawerDatabase = DrawerDatabase.getInstance(context)
-            val drawerDao = drawerDatabase.drawerDao()
-            val notiNotSeenCount = drawerDao.getNotiNotSeenCount()
-            liveData.postValue(notiNotSeenCount)
-        }
-        return liveData
-    }
+    val notSeenCount: LiveData<Int> = notiRepository.notSeenCount
 
     @SuppressLint("StaticFieldLeak")
     val context: Context = getApplication<Application>().applicationContext

@@ -112,18 +112,10 @@ fun postOngoingNotification(context: Context) {
             notiWithSenders.forEach { notiUnit ->
                 val notiSender = notiUnit.title
                 val notiCount = notiUnit.notiInfos.size
-                if (notiUnit.appName != appName) {
-                    if (appName.isNotBlank())
-                        sb.append("\n\n")
-                    appName = notiUnit.appName
-                    sb.append("[$appName]\n$notiSender")
-                    if (notiCount > 1)
-                        sb.append(" ($notiCount messages)")
-                } else {
-                    sb.append("\n$notiSender")
-                    if (notiCount > 1)
-                        sb.append(" ($notiCount messages)")
-                }
+                sb.append(notiSender)
+                if (notiCount > 1)
+                    sb.append(" ($notiCount messages)")
+                sb.append("\n")
             }
         }
 

@@ -5,7 +5,6 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,14 +23,12 @@ import androidx.compose.material.SwipeableDefaults
 import androidx.compose.material.rememberSwipeableState
 import androidx.compose.material.swipeable
 import androidx.compose.material3.ElevatedButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -63,8 +60,7 @@ import org.muilab.notigpt.viewModel.DrawerViewModel
 import kotlin.math.roundToInt
 
 @RequiresApi(Build.VERSION_CODES.S)
-@OptIn(ExperimentalMaterialApi::class, ExperimentalFoundationApi::class,
-    ExperimentalMaterial3Api::class
+@OptIn(ExperimentalMaterialApi::class
 )
 @Composable
 fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
@@ -72,12 +68,6 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
     val listState = rememberLazyListState()
     val notSeenCount by drawerViewModel.notSeenCount.observeAsState(0)
     val coroutineScope = rememberCoroutineScope()
-
-    val isScrolledToTop = remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-        }
-    }
 
     val lazyPagingItems = drawerViewModel.allPaged.collectAsLazyPagingItems()
     val notiToKey: (NotiUnit) -> String = {
@@ -134,7 +124,7 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
                     }
 
                     LaunchedEffect(swipeableState, interactionSource, isBackAnimationTriggered) {
-                        Log.d("Swipe", "${notiUnit.title}: ${isBackAnimationTriggered}")
+                        Log.d("Swipe", "${notiUnit.title}: $isBackAnimationTriggered")
                         interactionSource.interactions.collect { interaction ->
                             when (interaction) {
                                 is DragInteraction.Stop -> {
@@ -213,9 +203,7 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
                             )
                             .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
                     ) {
-                        NotiCard(context, notiUnit, drawerViewModel) {
-                            isScrolledToTop.value
-                        }
+                        NotiCard(context, notiUnit, drawerViewModel)
                     }
                 }
 
@@ -324,7 +312,7 @@ fun updateSeenNotifications(context: Context, seenItems: Set<String>) {
         val drawerDatabase = DrawerDatabase.getInstance(context)
         val drawerDao = drawerDatabase.drawerDao()
         val newSeenNotis = drawerDao.getBySbnKeys(seenItems.toList())
-        newSeenNotis.forEachIndexed { idx, notiUnit -> newSeenNotis[idx].notiSeen = true }
+        newSeenNotis.forEachIndexed { idx, _ -> newSeenNotis[idx].notiSeen = true }
         drawerDao.updateList(newSeenNotis)
         postOngoingNotification(context)
     }

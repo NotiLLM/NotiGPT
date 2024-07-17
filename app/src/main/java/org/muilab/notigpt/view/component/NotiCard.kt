@@ -69,7 +69,7 @@ import kotlin.math.abs
 @OptIn(ExperimentalFoundationApi::class)
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
-fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewModel, isScrolledToTop: () -> Boolean) {
+fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewModel) {
     val bitmap = notiUnit.getBitmap()
     val largeBitmap = notiUnit.getLargeBitmap()
 
@@ -88,12 +88,9 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
 
     var requiresExpansion by remember { mutableStateOf(
         notiInfos.size > 1 ||
-                (notiInfos.size == 1
-                && notiInfos[0].title.isNotBlank()
-                && notiInfos[0].person.isNotBlank()
-                && notiInfos[0].title != notiInfos[0].person)
-    ) }
-    var allowDragAnywhere by remember { mutableStateOf(true) }
+                (notiInfos.size == 1 && notiInfos[0].getTitle(notiUnit.pkgName, notiUnit.isPeople)
+                    .let { notiUnit.title.isNotBlank() && notiUnit.title != it }))
+    }
 
     var maxContentHeight by remember { mutableFloatStateOf(0f) }
     val expansionProgress: (Float, Float) -> Float = { offset, maxHeight ->
@@ -133,10 +130,10 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
             onDrag = { change, dragAmount ->
                 if (!hasStartedDragging) {
                     hasStartedDragging = true
-                    if (abs(dragAmount.y) > abs(dragAmount.x)) {
-                        isInitialDragDownward = dragAmount.y > 0
+                    isInitialDragDownward = if (abs(dragAmount.y) > abs(dragAmount.x)) {
+                        dragAmount.y > 0
                     } else {
-                        isInitialDragDownward = false
+                        false
                     }
                 }
 
@@ -357,8 +354,10 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                 color = Color.White
                             )
 
-                            val isThread = notiInfos.size > 1
-                            val isGroup = notiInfos.map { it.title }.toSet().size > 1
+                            val isGroup = (listOf(notiUnit.title)
+                                    + notiInfos.map { it.getTitle(notiUnit.pkgName, notiUnit.isPeople) })
+                                .filter { it.isNotBlank() }
+                                .toSet().size > 1
 
                             val listState = rememberLazyListState(
                                 initialFirstVisibleItemIndex = maxOf(
@@ -379,11 +378,17 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                         notiUnit.pkgName,
                                         notiUnit.isPeople
                                     )
+                                    val prevTitle = if (i == 0)
+                                        notiUnit.title
+                                    else
+                                        notiInfos[i - 1].getTitle(
+                                            notiUnit.pkgName,
+                                            notiUnit.isPeople
+                                        )
                                     val notiTime = notiInfos[i].time
                                     val notiContent = notiInfos[i].content
-                                    val newTitle =
-                                        (i == 0 || notiTitle != notiInfos[i - 1].title)
-                                    val showTitle = isThread && isGroup && newTitle
+                                    val newTitle = (notiTitle != prevTitle && notiTitle.isNotBlank() && prevTitle.isNotBlank())
+                                    val showTitle = isGroup && newTitle
 
                                     if (newTitle)
                                         Spacer(modifier = Modifier.height(4.dp))
@@ -407,7 +412,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                                     FontWeight.Normal
                                             )
                                         )
-                                        if (!(isGroup && newTitle) && isThread) {
+                                        if (!showTitle) {
                                             Text(
                                                 modifier = Modifier
                                                     .wrapContentWidth()

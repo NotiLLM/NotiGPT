@@ -6,15 +6,19 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.util.Log
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.database.room.DrawerDatabase
 import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.util.createNotificationChannel
+import org.muilab.notigpt.util.postOngoingNotification
 
 class NotiListenerService: NotificationListenerService() {
 
@@ -32,13 +36,17 @@ class NotiListenerService: NotificationListenerService() {
             else
                 null
         }
+
+        val NOTI_REMOVE_DELAY = 10 * 1000L
     }
 
+    @RequiresApi(Build.VERSION_CODES.S)
     override fun onListenerConnected() {
         super.onListenerConnected()
         activeNotifications.forEach {
-            addNotification(it, currentRanking, true)
+            addNotification(it, true)
         }
+        createNotificationChannel(applicationContext)
     }
 
     override fun onListenerDisconnected() {
@@ -74,45 +82,54 @@ class NotiListenerService: NotificationListenerService() {
         return START_STICKY
     }
 
-    override fun onNotificationPosted(sbn: StatusBarNotification, rankingMap: RankingMap) {
-        addNotification(sbn, rankingMap, false)
+    @RequiresApi(Build.VERSION_CODES.S)
+    override fun onNotificationPosted(sbn: StatusBarNotification) {
+        addNotification(sbn, false)
     }
 
-    private fun addNotification(sbn: StatusBarNotification, rankingMap: RankingMap, isInit: Boolean) {
-        fun isMessageNotification(sbn: StatusBarNotification): Boolean {
-            val notification = sbn.notification
-            return (notification.extras.get(Notification.EXTRA_MESSAGES) != null
-                    || notification.extras.get(Notification.EXTRA_HISTORIC_MESSAGES) != null
-                    || notification.extras.get(Notification.EXTRA_MESSAGING_PERSON) != null
-                    || notification.category == Notification.CATEGORY_MESSAGE)
+    @RequiresApi(Build.VERSION_CODES.S)
+    private fun addNotification(sbn: StatusBarNotification, isInit: Boolean) {
+
+
+
+        if (sbn.packageName.equals(packageName) || sbn.isOngoing || !sbn.isClearable)
+            return
+
+        if ((sbn.notification?.flags as Int and Notification.FLAG_GROUP_SUMMARY) > 0) {
+            CoroutineScope(Dispatchers.IO).launch {
+                delay(NOTI_REMOVE_DELAY)
+                cancelNotification(sbn.key)
+            }
+            return
         }
 
-        if ((sbn.notification?.flags as Int and Notification.FLAG_GROUP_SUMMARY) > 0)
+        val notiStyle = sbn.notification.extras.getCharSequence(Notification.EXTRA_TEMPLATE)
+        if (notiStyle == Notification.MediaStyle::class.java.canonicalName)
             return
+
         CoroutineScope(Dispatchers.IO).launch {
             val drawerDatabase = DrawerDatabase.getInstance(applicationContext)
             val drawerDao = drawerDatabase.drawerDao()
             val existingNoti = drawerDao.getBySbnKey(sbn.key)
             if (existingNoti.isEmpty()) {
-                drawerDao.insert(NotiUnit(applicationContext, sbn, rankingMap))
+                drawerDao.insert(NotiUnit(applicationContext, sbn))
             } else if (!isInit) {
-                if (!existingNoti[0].isVisible())
-                    existingNoti[0].makeVisible(isMessageNotification(sbn))
-                existingNoti[0].updateNoti(applicationContext, sbn, rankingMap, isMessageNotification(sbn))
+                existingNoti[0].makeVisible(sbn)
+                existingNoti[0].updateNoti(applicationContext, sbn)
                 drawerDao.update(existingNoti[0])
             }
-            rankingMap.orderedKeys.forEachIndexed { idx, key ->
-                val noti = drawerDao.getBySbnKey(key)
-                if (noti.isEmpty())
-                    return@forEachIndexed
-                noti[0].ranking = idx
-                drawerDao.update(noti[0])
+            postOngoingNotification(applicationContext)
+            if (!isInit) {
+                delay(NOTI_REMOVE_DELAY)
+                cancelNotification(sbn.key)
             }
         }
     }
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        Log.d("RemoveNoti", sbn.packageName)
+    @RequiresApi(Build.VERSION_CODES.S)
+    override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap, reason: Int) {
+        if (reason in setOf(REASON_LISTENER_CANCEL, REASON_GROUP_SUMMARY_CANCELED, REASON_GROUP_OPTIMIZATION))
+            return
         CoroutineScope(Dispatchers.IO).launch {
             val drawerDatabase = DrawerDatabase.getInstance(applicationContext)
             val drawerDao = drawerDatabase.drawerDao()
@@ -121,6 +138,7 @@ class NotiListenerService: NotificationListenerService() {
                 existingNoti[0].hideNoti()
                 drawerDao.update(existingNoti[0])
             }
+            postOngoingNotification(applicationContext)
         }
     }
 

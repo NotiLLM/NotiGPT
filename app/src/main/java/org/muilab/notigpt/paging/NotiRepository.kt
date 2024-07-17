@@ -1,5 +1,6 @@
 package org.muilab.notigpt.paging
 
+import androidx.lifecycle.LiveData
 import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
@@ -15,4 +16,6 @@ class NotiRepository(private val drawerDao: DrawerDao) {
             drawerDao.getAllVisiblePaged()
         }.flow
     }
+
+    val notSeenCount: LiveData<Int> = drawerDao.getNotiNotSeenCount()
 }

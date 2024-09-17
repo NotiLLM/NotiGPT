@@ -1,7 +1,11 @@
 package org.muilab.notigpt.view.component
 
+import android.app.Activity
 import android.content.Context
+import android.graphics.Rect
 import android.os.Build
+import android.util.Log
+import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -9,6 +13,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.animateTo
@@ -26,14 +31,19 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,13 +58,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.R
 import org.muilab.notigpt.model.NotiUnit
@@ -157,22 +170,74 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
         )
     }
 
+    var isDropdownMenuExpanded by remember { mutableStateOf(false) }
+    var inputText by remember { mutableStateOf("") }
 
+    // 下拉式選單當鍵盤開出時就可以自己跳到上面來，不需要等到按下換行按鍵才重新佈局
+    var isKeyboardVisible = isKeyboardVisible()
+    LaunchedEffect(isKeyboardVisible) {
+        if (isKeyboardVisible && isDropdownMenuExpanded) {
+            inputText = "\n"
+            delay(5)
+            inputText = inputText.dropLast(1)
+        }
+    }
 
     Card(
         modifier = Modifier
             .padding(vertical = 1.dp, horizontal = 16.dp)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = {
+                    if (!notiUnit.pinned)
+                        drawerViewModel.actOnNoti(notiUnit, "click_dismiss")
+                    NotiListenerService
+                        .getPendingIntent(context, notiUnit)
+                        ?.send()
+                },
+                onLongClick = {
+                    isDropdownMenuExpanded = true
+                }
+            ),
         shape = MaterialTheme.shapes.large,
-        onClick = {
-            if (!notiUnit.pinned)
-                drawerViewModel.actOnNoti(notiUnit, "click_dismiss")
-            NotiListenerService.getPendingIntent(context, notiUnit)?.send()
-        },
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor
         )
     ) {
+        //**
+        DropdownMenu(
+            expanded = isDropdownMenuExpanded,
+            onDismissRequest = { isDropdownMenuExpanded = false },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ){
+                Spacer(modifier = Modifier.weight(0.7f))
+                TextField(
+                    value = inputText,
+                    onValueChange = { inputText = it },
+                    placeholder = { Text("填寫意見") },
+                    modifier = Modifier.weight(8f)
+                )
+                Spacer(modifier = Modifier.weight(0.7f))
+                Button(
+                    onClick = {
+                        getComment(inputText,notiUnit.hashKey)
+                        isDropdownMenuExpanded = false
+                    },
+                    modifier = Modifier.weight(3f)
+                ){
+                    Text("送出")
+                }
+                Spacer(modifier = Modifier.weight(0.7f))
+            }
+        }
+        //**
+
         val progress = expansionProgress(anchoredDraggableState.offset, maxContentHeight)
         Row(
             modifier = Modifier
@@ -497,4 +562,31 @@ fun ScoreDisplay(notiUnit: NotiUnit) {
         )
         Spacer(Modifier.padding(5.dp))
     }
+}
+
+fun getComment(input: String, notiHashkey: Int) {
+    Log.d("MyApp", "用戶對通知$notiHashkey 輸入意見:$input")
+}
+
+@Composable
+fun isKeyboardVisible(): Boolean {
+    val view = LocalView.current
+    val rootView = (LocalContext.current as Activity).window.decorView
+    var isKeyboardVisible by remember { mutableStateOf(false) }
+
+    DisposableEffect(view) {
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            val rect = Rect()
+            rootView.getWindowVisibleDisplayFrame(rect)
+            val screenHeight = rootView.height
+            val keypadHeight = screenHeight - rect.bottom
+            isKeyboardVisible = keypadHeight > screenHeight * 0.15
+        }
+        rootView.viewTreeObserver.addOnGlobalLayoutListener(listener)
+
+        onDispose {
+            rootView.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+        }
+    }
+    return isKeyboardVisible
 }

@@ -81,6 +81,7 @@ dependencies {
     implementation("androidx.paging:paging-runtime-ktx:$pagingVersion")
     implementation("androidx.paging:paging-compose:3.3.0-rc01")
 
+
     // OpenAI
     val ktorVersion = "2.3.11"
     implementation("com.aallam.openai:openai-client:3.7.2")

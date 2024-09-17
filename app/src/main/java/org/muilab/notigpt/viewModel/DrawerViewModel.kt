@@ -9,9 +9,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import androidx.paging.map
+import androidx.paging.filter
 import androidx.paging.PagingData
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.database.room.DrawerDatabase
 import org.muilab.notigpt.model.NotiUnit
@@ -30,6 +33,25 @@ class DrawerViewModel(
 
     @SuppressLint("StaticFieldLeak")
     val context: Context = getApplication<Application>().applicationContext
+
+    //filter notification
+    fun getFilteredPaged(category: String): Flow<PagingData<NotiUnit>> {
+        return when (category) {
+            "all" -> allPaged
+            "social" -> allPaged.map { pagingData:PagingData<NotiUnit> ->
+                pagingData.filter { notiUnit: NotiUnit ->
+                    notiUnit.appName in listOf("Facebook", "Instagram", "Line", "Messenger", "Slack")
+                }
+            }
+            "email" -> allPaged.map { pagingData:PagingData<NotiUnit> ->
+                pagingData.filter { notiUnit:NotiUnit ->
+                    notiUnit.appName == "Gmail"
+                }
+            }
+            else -> allPaged  // fallback to all notifications
+        }
+    }
+
 
     @RequiresApi(Build.VERSION_CODES.S)
     fun actOnNoti(notiUnit: NotiUnit, action: String) {

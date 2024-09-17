@@ -63,13 +63,13 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterialApi::class
 )
 @Composable
-fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
+fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: String) {
 
     val listState = rememberLazyListState()
     val notSeenCount by drawerViewModel.notSeenCount.observeAsState(0)
     val coroutineScope = rememberCoroutineScope()
 
-    val lazyPagingItems = drawerViewModel.allPaged.collectAsLazyPagingItems()
+    val lazyPagingItems = drawerViewModel.getFilteredPaged(category).collectAsLazyPagingItems() // get filtered notification
     val notiToKey: (NotiUnit) -> String = {
         val priority = when {
             (!it.notiSeen) -> "A"
@@ -78,6 +78,8 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel) {
         "${priority}_${(6 - it.importance).toString()[0]}_${it.sbnKey}"
     }
     val seenItems = remember { mutableSetOf<String>() }
+
+
 
     LazyColumn(
         state = listState,

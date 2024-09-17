@@ -26,9 +26,9 @@ fun TabContent(
 ) {
     HorizontalPager(state = pagerState) { index ->
         when (index) {
-            0 -> HomeScreen(context, drawerViewModel, gptViewModel)
-            1 -> SettingsScreen()
-            2 -> SettingsScreen()
+            0 -> HomeScreen(context, drawerViewModel, gptViewModel, category="all")
+            1 -> HomeScreen(context, drawerViewModel, gptViewModel, category="social")
+            2 -> HomeScreen(context, drawerViewModel, gptViewModel, category="email")
         }
     }
 

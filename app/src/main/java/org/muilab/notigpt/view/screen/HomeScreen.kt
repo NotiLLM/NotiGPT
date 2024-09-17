@@ -22,13 +22,13 @@ import org.muilab.notigpt.viewModel.GPTViewModel
 
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
-fun HomeScreen(context: Context, drawerViewModel: DrawerViewModel, gptViewModel: GPTViewModel) {
+fun HomeScreen(context: Context, drawerViewModel: DrawerViewModel, gptViewModel: GPTViewModel, category:String) {
 
     val notiPostContent by drawerViewModel.notiPostContent.observeAsState("")
 
     Column {
         Box (Modifier.weight(1F), contentAlignment = Alignment.TopCenter) {
-            NotiDrawer(context, drawerViewModel)
+            NotiDrawer(context, drawerViewModel, category)
 //            Box(
 //                modifier = Modifier.fillMaxSize(),
 //                contentAlignment = Alignment.BottomCenter

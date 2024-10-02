@@ -26,11 +26,11 @@ class NotiListenerService: NotificationListenerService() {
         val pendingIntents = mutableMapOf<String, PendingIntent>()
 
         fun getPendingIntent(context: Context, notiUnit: NotiUnit): PendingIntent? {
-            val sbnKey = notiUnit.sbnKey
+            val sbnKey = notiUnit.metadata.sbnKey
             if (sbnKey in pendingIntents)
                 return pendingIntents[sbnKey]
 
-            val launchIntent = context.packageManager.getLaunchIntentForPackage(notiUnit.pkgName)
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(notiUnit.metadata.pkgName)
             return if (launchIntent != null)
                 PendingIntent.getActivity(context, 0, launchIntent, PendingIntent.FLAG_IMMUTABLE)
             else
@@ -114,7 +114,6 @@ class NotiListenerService: NotificationListenerService() {
             if (existingNoti.isEmpty()) {
                 drawerDao.insert(NotiUnit(applicationContext, sbn))
             } else if (!isInit) {
-                existingNoti[0].makeVisible(sbn)
                 existingNoti[0].updateNoti(applicationContext, sbn)
                 drawerDao.update(existingNoti[0])
             }
@@ -135,7 +134,7 @@ class NotiListenerService: NotificationListenerService() {
             val drawerDao = drawerDatabase.drawerDao()
             val existingNoti = drawerDao.getBySbnKey(sbn.key)
             if (existingNoti.isNotEmpty()) {
-                existingNoti[0].hideNoti()
+                existingNoti[0].removeNoti()
                 drawerDao.update(existingNoti[0])
             }
             postOngoingNotification(applicationContext)

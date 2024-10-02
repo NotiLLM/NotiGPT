@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -83,26 +85,34 @@ import kotlin.math.abs
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
 fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewModel) {
+
+    Log.d("NotiRecompose", "NotiCard: ${notiUnit.getTitle()}")
+
+    val pinned = notiUnit.getPinned()
+    val wholeNotiRead = notiUnit.getWholeNotiRead()
+    val notiOverallTitle = notiUnit.getTitle()
+    val isPeople = notiUnit.getIsPeople()
+    val pkgName = notiUnit.getPkgName()
+    val appName = notiUnit.getAppName()
     val bitmap = notiUnit.getBitmap()
     val largeBitmap = notiUnit.getLargeBitmap()
 
     val backgroundColor = when {
-        notiUnit.pinned -> MaterialTheme.colorScheme.tertiary
+        pinned -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
     val timeColor = when {
-        !notiUnit.notiSeen -> MaterialTheme.colorScheme.error
-        notiUnit.pinned -> MaterialTheme.colorScheme.tertiary
+        !wholeNotiRead -> MaterialTheme.colorScheme.error
+        pinned -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
-    val notiInfos = notiUnit.notiInfos.toList()
-
+    val notiBody = notiUnit.getNotiBody().toCollection(ArrayList())
     var requiresExpansion by remember { mutableStateOf(
-        notiInfos.size > 1 ||
-                (notiInfos.size == 1 && notiInfos[0].getTitle(notiUnit.pkgName, notiUnit.isPeople)
-                    .let { notiUnit.title.isNotBlank() && notiUnit.title != it }))
+        notiBody.size > 1 ||
+                (notiBody.size == 1 && notiBody[0].getTitle(pkgName, isPeople)
+                    .let { notiOverallTitle.isNotBlank() && notiOverallTitle != it }))
     }
 
     var maxContentHeight by remember { mutableFloatStateOf(0f) }
@@ -123,10 +133,11 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
             initialValue = NotiExpandState.Collapsed,
             anchors = anchors,
             positionalThreshold = {distance: Float -> distance * 0.5f},
-            animationSpec = spring(
+            snapAnimationSpec = spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow,
             ),
+            decayAnimationSpec = exponentialDecay(),
             velocityThreshold = { with(density) { 80.dp.toPx()} }
         )
     }
@@ -185,11 +196,11 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
 
     Card(
         modifier = Modifier
-            .padding(vertical = 1.dp, horizontal = 16.dp)
+            .padding(vertical = 1.dp, horizontal = 20.dp)
             .fillMaxWidth()
             .combinedClickable(
                 onClick = {
-                    if (!notiUnit.pinned)
+                    if (!pinned)
                         drawerViewModel.actOnNoti(notiUnit, "click_dismiss")
                     NotiListenerService
                         .getPendingIntent(context, notiUnit)
@@ -226,7 +237,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                 Spacer(modifier = Modifier.weight(0.7f))
                 Button(
                     onClick = {
-                        getComment(inputText,notiUnit.hashKey)
+                        getComment(inputText,notiUnit.getHashKey())
                         isDropdownMenuExpanded = false
                     },
                     modifier = Modifier.weight(3f)
@@ -247,32 +258,46 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
             Column(
                 Modifier.padding(start = 2.dp, end = 3.dp),
             ) {
-                if (bitmap != null) {
-                    if (largeBitmap != null && bitmap != largeBitmap)
-                        requiresExpansion = true
+                // Use remember to optimize bitmap selection logic
+                val imageToDisplay = remember(bitmap, largeBitmap, anchoredDraggableState.offset) {
                     if (anchoredDraggableState.offset > COLLAPSE_THRESHOLD && largeBitmap != null) {
+                        largeBitmap.asImageBitmap()
+                    } else {
+                        bitmap?.asImageBitmap()
+                    }
+                }
+
+                // Use remember to optimize transparent pixel check
+                val hasTransparency = remember(bitmap) {
+                    bitmap != null && hasTransparentPixels(bitmap, 0.1f)
+                }
+
+                if (imageToDisplay != null) {
+                    if (anchoredDraggableState.offset > COLLAPSE_THRESHOLD && largeBitmap != null) {
+                        // Render the large image when expanded
                         Image(
-                            largeBitmap.asImageBitmap(),
-                            "Notification Icon",
-                            Modifier
+                            bitmap = imageToDisplay,
+                            contentDescription = "Notification Icon",
+                            modifier = Modifier
                                 .size((35 + 15 * progress).dp)
                                 .padding(vertical = 3.dp, horizontal = 6.dp)
                         )
                     } else {
-                        if (hasTransparentPixels(bitmap, 0.1f)) {
+                        // Render the icon if bitmap has transparency, otherwise render the image
+                        if (hasTransparency) {
                             Icon(
-                                bitmap.asImageBitmap(),
-                                "Notification Icon",
-                                Modifier
+                                bitmap = imageToDisplay,
+                                contentDescription = "Notification Icon",
+                                modifier = Modifier
                                     .size((35 + 15 * progress).dp)
                                     .padding(vertical = 3.dp, horizontal = 6.dp),
                                 tint = contentColorFor(backgroundColor)
                             )
                         } else {
                             Image(
-                                bitmap.asImageBitmap(),
-                                "Notification Icon",
-                                Modifier
+                                bitmap = imageToDisplay,
+                                contentDescription = "Notification Icon",
+                                modifier = Modifier
                                     .size((35 + 15 * progress).dp)
                                     .padding(vertical = 3.dp, horizontal = 6.dp)
                             )
@@ -288,11 +313,10 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                             .padding(horizontal = 5.dp)
                             .weight(1f)
                     ) {
-                        val notiTitle = notiUnit.title
                         Row(Modifier.fillMaxWidth()) {
                             if (anchoredDraggableState.offset > COLLAPSE_THRESHOLD) {
                                 Text(
-                                    text = notiUnit.appName,
+                                    text = appName,
                                     fontSize = (10 + progress * 4).sp
                                 )
                                 Spacer(Modifier.weight(1F))
@@ -301,7 +325,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                     modifier = Modifier
                                         .background(Color.Transparent)
                                         .weight(1F),
-                                    text = if (notiTitle == "null") notiUnit.appName else notiTitle,
+                                    text = if (notiOverallTitle == "null") appName else notiOverallTitle,
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.ExtraBold
                                     ),
@@ -334,7 +358,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                 Text(
                                     modifier = Modifier
                                         .background(Color.Transparent),
-                                    text = if (notiTitle == "null") "" else notiTitle,
+                                    text = if (notiOverallTitle == "null") "" else notiOverallTitle,
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.ExtraBold
                                     ),
@@ -347,7 +371,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                     }
                                 )
                             } else {
-                                val notiContent = notiInfos.last().content
+                                val notiContent = notiBody.last().content
                                 Text(
                                     modifier = Modifier.background(Color.Transparent),
                                     text = if (notiContent == "null") "" else replaceChars(
@@ -366,7 +390,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                     }
 
                     Column {
-                        if (notiUnit.pinned) {
+                        if (pinned) {
                             Icon(
                                 painter = painterResource(R.drawable.pin),
                                 "Pin",
@@ -419,14 +443,14 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                 color = Color.White
                             )
 
-                            val isGroup = (listOf(notiUnit.title)
-                                    + notiInfos.map { it.getTitle(notiUnit.pkgName, notiUnit.isPeople) })
+                            val isGroup = (listOf(notiOverallTitle)
+                                    + notiBody.map { it.getTitle(pkgName, isPeople) })
                                 .filter { it.isNotBlank() }
                                 .toSet().size > 1
 
                             val listState = rememberLazyListState(
                                 initialFirstVisibleItemIndex = maxOf(
-                                    notiInfos.size - 1,
+                                    notiBody.size - 1,
                                     0
                                 )
                             )
@@ -437,26 +461,33 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                 state = listState
                             ) {
 
-                                items(notiInfos.size) { i ->
+                                itemsIndexed(notiBody, key = { _, noti -> noti.time} ) { idx, noti ->
 
-                                    val notiTitle = notiInfos[i].getTitle(
-                                        notiUnit.pkgName,
-                                        notiUnit.isPeople
+                                    val notiTitle = noti.getTitle(
+                                        pkgName,
+                                        isPeople
                                     )
-                                    val prevTitle = if (i == 0)
-                                        notiUnit.title
+                                    val prevTitle = if (idx == 0)
+                                        notiOverallTitle
                                     else
-                                        notiInfos[i - 1].getTitle(
-                                            notiUnit.pkgName,
-                                            notiUnit.isPeople
+                                        notiBody[idx - 1].getTitle(
+                                            pkgName,
+                                            isPeople
                                         )
-                                    val notiTime = notiInfos[i].time
-                                    val notiContent = notiInfos[i].content
+                                    val notiTime = noti.time
+                                    val notiContent = noti.content
+                                    val notiSeen = noti.notiSeen
                                     val newTitle = (notiTitle != prevTitle && notiTitle.isNotBlank() && prevTitle.isNotBlank())
                                     val showTitle = isGroup && newTitle
 
                                     if (newTitle)
                                         Spacer(modifier = Modifier.height(4.dp))
+
+                                    val infoTimeColor = when {
+                                        !notiSeen -> MaterialTheme.colorScheme.error
+                                        pinned -> MaterialTheme.colorScheme.tertiary
+                                        else -> MaterialTheme.colorScheme.surfaceVariant
+                                    }
 
                                     Row(Modifier.fillMaxWidth()) {
                                         Text(
@@ -478,16 +509,23 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                             )
                                         )
                                         if (!showTitle) {
-                                            Text(
+
+                                            Box(
                                                 modifier = Modifier
-                                                    .wrapContentWidth()
-                                                    .background(Color.Transparent),
-                                                text = getDisplayTimeStr(notiTime),
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontSize = 14.sp,
-                                                    fontStyle = FontStyle.Italic
+                                                    .background(infoTimeColor, RoundedCornerShape(16.dp))
+                                            ) {
+                                                Text(
+                                                    modifier = Modifier
+                                                        .wrapContentWidth()
+                                                        .background(Color.Transparent),
+                                                    text = getDisplayTimeStr(notiTime),
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 12.sp,
+                                                        fontStyle = FontStyle.Italic
+                                                    ),
+                                                    color = contentColorFor(infoTimeColor)
                                                 )
-                                            )
+                                            }
                                         }
                                         Spacer(modifier = Modifier.padding(horizontal = 5.dp))
                                     }
@@ -504,16 +542,22 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                                     fontSize = 14.sp
                                                 )
                                             )
-                                            Text(
+                                            Box(
                                                 modifier = Modifier
-                                                    .wrapContentWidth()
-                                                    .background(Color.Transparent),
-                                                text = getDisplayTimeStr(notiTime),
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontSize = 14.sp,
-                                                    fontStyle = FontStyle.Italic
+                                                    .background(infoTimeColor, RoundedCornerShape(16.dp))
+                                            ) {
+                                                Text(
+                                                    modifier = Modifier
+                                                        .wrapContentWidth()
+                                                        .background(Color.Transparent),
+                                                    text = getDisplayTimeStr(notiTime),
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        fontSize = 12.sp,
+                                                        fontStyle = FontStyle.Italic
+                                                    ),
+                                                    color = contentColorFor(infoTimeColor)
                                                 )
-                                            )
+                                            }
                                             Spacer(
                                                 modifier = Modifier.padding(
                                                     horizontal = 5.dp
@@ -555,7 +599,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
 fun ScoreDisplay(notiUnit: NotiUnit) {
     Row {
         Text(
-            text = String.format("%.2f", notiUnit.score),
+            text = String.format("%.2f", notiUnit.getScore()),
             fontSize = 10.sp,
             fontWeight = FontWeight.ExtraBold,
             color = Color.Cyan

@@ -28,35 +28,6 @@ class GPTViewModel(application: Application) : AndroidViewModel(application) {
     fun setService(gptService: GPTService) {
         this.gptService = gptService
     }
-    fun getCategories() {
-        viewModelScope.launch {
-            val responseStr = gptService.makeRequest("categorize").trimIndent()
-            val notiCategories = responseStr.split("\n")
-            _response.postValue(responseStr)
-
-            CoroutineScope(Dispatchers.IO).launch {
-                val drawerDatabase = DrawerDatabase.getInstance(context)
-                val drawerDao = drawerDatabase.drawerDao()
-                val updateNotis = mutableListOf<NotiUnit>()
-                for (notiCategory in notiCategories) {
-                    val segments = notiCategory.trim().split(" ")
-                    if (segments.size == 2) {
-                        try {
-                            val hashKey = segments[0].toInt()
-                            val newGPTCategory = segments[1]
-                            val existingNoti = drawerDao.getByHashKey(hashKey)
-                            if (existingNoti.isNotEmpty())
-                                updateNotis.add(existingNoti[0].copy(gptCategory = newGPTCategory))
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
-                drawerDao.updateList(updateNotis)
-            }
-            Toast.makeText(context, "Categorize Complete", Toast.LENGTH_SHORT).show()
-        }
-    }
 
     fun sortNotis() {
         viewModelScope.launch {
@@ -70,15 +41,19 @@ class GPTViewModel(application: Application) : AndroidViewModel(application) {
                 val updateNotis = mutableListOf<NotiUnit>()
                 for (notiCategory in notiCategories) {
                     val segments = notiCategory.trim().split(" ")
-                    if (segments.size == 2) {
+                    if (segments.size == 4) {
                         try {
                             val hashKey = segments[0].toInt()
-                            val newScore = segments[1].toDouble()
+                            val timeScore = segments[1].toDouble()
+                            val senderScore = segments[2].toDouble()
+                            val contentScore = segments[3].toDouble()
                             val existingNoti = drawerDao.getByHashKey(hashKey)
                             if (existingNoti.isNotEmpty())
                                 updateNotis.add(
                                     existingNoti[0].copy(
-                                        score = newScore
+                                        outcome = existingNoti[0].outcome.copy(
+                                            score = timeScore + senderScore + contentScore
+                                        )
                                     )
                                 )
                         } catch (e: Exception) {
@@ -109,7 +84,11 @@ class GPTViewModel(application: Application) : AndroidViewModel(application) {
                         val newSummary = segments[1]
                         val existingNoti = drawerDao.getByHashKey(hashKey)
                         if (existingNoti.isNotEmpty())
-                            updateNotis.add(existingNoti[0].copy(summary = newSummary))
+                            updateNotis.add(existingNoti[0].copy(
+                                outcome = existingNoti[0].outcome.copy(
+                                    summary = newSummary
+                                )
+                            ))
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }

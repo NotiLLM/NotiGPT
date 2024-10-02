@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.FractionalThreshold
@@ -29,6 +30,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -45,23 +48,18 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.paging.compose.collectAsLazyPagingItems
-import androidx.paging.compose.itemContentType
-import androidx.paging.compose.itemKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.R
 import org.muilab.notigpt.database.room.DrawerDatabase
-import org.muilab.notigpt.model.NotiUnit
 import org.muilab.notigpt.util.postOngoingNotification
 import org.muilab.notigpt.view.utils.LifecycleObserver
 import org.muilab.notigpt.viewModel.DrawerViewModel
 import kotlin.math.roundToInt
 
 @RequiresApi(Build.VERSION_CODES.S)
-@OptIn(ExperimentalMaterialApi::class
-)
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: String) {
 
@@ -69,17 +67,8 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
     val notSeenCount by drawerViewModel.notSeenCount.observeAsState(0)
     val coroutineScope = rememberCoroutineScope()
 
-    val lazyPagingItems = drawerViewModel.getFilteredPaged(category).collectAsLazyPagingItems() // get filtered notification
-    val notiToKey: (NotiUnit) -> String = {
-        val priority = when {
-            (!it.notiSeen) -> "A"
-            else -> "B"
-        }
-        "${priority}_${(6 - it.importance).toString()[0]}_${it.sbnKey}"
-    }
+    val notifications by drawerViewModel.getFilteredFlow(category).collectAsState()
     val seenItems = remember { mutableSetOf<String>() }
-
-
 
     LazyColumn(
         state = listState,
@@ -87,142 +76,132 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
             .fillMaxSize()
             .padding(top = 16.dp, bottom = 8.dp),
     ) {
-        items(
-            count = lazyPagingItems.itemCount,
-            key = lazyPagingItems.itemKey { notiToKey(it) },
-            contentType = lazyPagingItems.itemContentType { "Notifications" }
-        ) { idx ->
+        items(notifications, key = { it.notiKey }) { notiUnit ->
 
-            lazyPagingItems[idx]?.let { notiUnit ->
+            BoxWithConstraints {
 
-                BoxWithConstraints {
+                val density = LocalDensity.current
+                val swipeableState = rememberSwipeableState(initialValue = 0)
+                val interactionSource = remember { MutableInteractionSource() }
+                val resistanceLimit = with(density) { 32.dp.toPx() }  // Convert to pixels
+                val dismissLimit = -constraints.maxWidth.toFloat()
+                var pinningChanged by remember { mutableStateOf(false) }
 
-                    val density = LocalDensity.current
-                    val swipeableState = rememberSwipeableState(initialValue = 0)
-                    val interactionSource = remember { MutableInteractionSource() }
-                    val resistanceLimit = with(density) { 32.dp.toPx() }  // Convert to pixels
-                    val dismissLimit = -constraints.maxWidth.toFloat()
-                    var pinningChanged by remember { mutableStateOf(false) }
+                // Setup anchors for swipeable states: 0 for initial, right for resistance, left for dismiss
+                val anchors = if (notiUnit.getPinned())
+                    mapOf(
+                        0f to 0,
+                        resistanceLimit to 1
+                    )
+                else
+                    mapOf(
+                        0f to 0,
+                        resistanceLimit to 1,
+                        dismissLimit to -1
+                    )
 
-                    // Setup anchors for swipeable states: 0 for initial, right for resistance, left for dismiss
-                    val anchors = if (notiUnit.pinned)
-                        mapOf(
-                            0f to 0,
-                            resistanceLimit to 1
-                        )
-                    else
-                        mapOf(
-                            0f to 0,
-                            resistanceLimit to 1,
-                            dismissLimit to -1
-                        )
+                // A flag to prevent re-triggering the snap back
+                var isBackAnimationTriggered by remember { mutableStateOf(false) }
 
-                    // A flag to prevent re-triggering the snap back
-                    var isBackAnimationTriggered by remember { mutableStateOf(false) }
+                // Reset the flag when the user starts dragging again
+                if (swipeableState.isAnimationRunning) {
+                    isBackAnimationTriggered = false
+                }
 
-                    // Reset the flag when the user starts dragging again
-                    if (swipeableState.isAnimationRunning) {
-                        isBackAnimationTriggered = false
-                    }
-
-                    LaunchedEffect(swipeableState, interactionSource, isBackAnimationTriggered) {
-                        Log.d("Swipe", "${notiUnit.title}: $isBackAnimationTriggered")
-                        interactionSource.interactions.collect { interaction ->
-                            when (interaction) {
-                                is DragInteraction.Stop -> {
-                                    if ((swipeableState.offset.value >= 32 || swipeableState.currentValue == 1) && !pinningChanged) {
-                                        pinningChanged = true
-                                        swipeableState.snapTo(0)
-                                        drawerViewModel.actOnNoti(notiUnit, "pin")
-                                        pinningChanged = false
-                                        lazyPagingItems.refresh()
-                                    }
-                                    if (swipeableState.offset.value <= dismissLimit * 0.9f) {
-                                        drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
-                                        lazyPagingItems.refresh()
-                                    }
-                                    if (swipeableState.currentValue != -1 && !swipeableState.isAnimationRunning && !isBackAnimationTriggered) {
-                                        swipeableState.animateTo(0)
-                                        isBackAnimationTriggered = true  // Set flag to prevent re-triggering
-                                    }
+                LaunchedEffect(swipeableState, interactionSource, isBackAnimationTriggered) {
+                    Log.d("Swipe", "${notiUnit.getTitle()}: $isBackAnimationTriggered")
+                    interactionSource.interactions.collect { interaction ->
+                        when (interaction) {
+                            is DragInteraction.Stop -> {
+                                if ((swipeableState.offset.value >= 32 || swipeableState.currentValue == 1) && !pinningChanged) {
+                                    pinningChanged = true
+                                    swipeableState.snapTo(0)
+                                    drawerViewModel.actOnNoti(notiUnit, "pin")
+                                    pinningChanged = false
+                                }
+                                if (swipeableState.offset.value <= dismissLimit * 0.9f) {
+                                    drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
+                                }
+                                if (swipeableState.currentValue != -1 && !swipeableState.isAnimationRunning && !isBackAnimationTriggered) {
+                                    swipeableState.animateTo(0)
+                                    isBackAnimationTriggered = true  // Set flag to prevent re-triggering
                                 }
                             }
                         }
                     }
-
-                    LaunchedEffect(swipeableState) {
-                        snapshotFlow { swipeableState.currentValue }
-                            .collect { currentValue ->
-                                when (currentValue) {
-                                    1 -> {
-                                        if (!pinningChanged) {
-                                            pinningChanged = true
-                                            swipeableState.snapTo(0)
-                                            drawerViewModel.actOnNoti(notiUnit, "pin")
-                                            pinningChanged = false
-                                            lazyPagingItems.refresh()
-                                        }
-                                    }
-                                    -1 -> {
-                                        drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
-                                        lazyPagingItems.refresh()
-                                    }
-                                }
-                            }
-                        snapshotFlow { swipeableState.offset.value }
-                            .collect { offset ->
-                                when {
-                                    offset >= resistanceLimit * 0.9f -> {
-                                        if (!pinningChanged) {
-                                            pinningChanged = true
-                                            swipeableState.snapTo(0)
-                                            drawerViewModel.actOnNoti(notiUnit, "pin")
-                                            pinningChanged = false
-                                            lazyPagingItems.refresh()
-                                        }
-                                    }
-                                    offset <= dismissLimit * 0.6f -> {
-                                        drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
-                                        lazyPagingItems.refresh()
-                                    }
-                                }
-                            }
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .swipeable(
-                                state = swipeableState,
-                                anchors = anchors,
-                                thresholds = { _, _ -> FractionalThreshold(0.5f) },
-                                orientation = Orientation.Horizontal,
-                                interactionSource = interactionSource,
-                                resistance = SwipeableDefaults.resistanceConfig(
-                                    anchors = anchors.keys,
-                                    factorAtMin = if (notiUnit.pinned) Float.POSITIVE_INFINITY else 0f,
-                                    factorAtMax = 10f
-                                )
-                            )
-                            .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                    ) {
-                        NotiCard(context, notiUnit, drawerViewModel)
-                    }
                 }
 
-                if (listState.layoutInfo.visibleItemsInfo.any { it.key == notiToKey(notiUnit) }) {
-                    LaunchedEffect(notiUnit.sbnKey) {
-                        if (!notiUnit.notiSeen)
-                            seenItems.add(notiUnit.sbnKey)
-                    }
+                LaunchedEffect(swipeableState) {
+                    snapshotFlow { swipeableState.currentValue }
+                        .collect { currentValue ->
+                            when (currentValue) {
+                                1 -> {
+                                    if (!pinningChanged) {
+                                        pinningChanged = true
+                                        swipeableState.snapTo(0)
+                                        drawerViewModel.actOnNoti(notiUnit, "pin")
+                                        pinningChanged = false
+                                    }
+                                }
+                                -1 -> {
+                                    drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
+                                }
+                            }
+                        }
+                    snapshotFlow { swipeableState.offset.value }
+                        .collect { offset ->
+                            when {
+                                offset >= resistanceLimit * 0.9f -> {
+                                    if (!pinningChanged) {
+                                        pinningChanged = true
+                                        swipeableState.snapTo(0)
+                                        drawerViewModel.actOnNoti(notiUnit, "pin")
+                                        pinningChanged = false
+                                    }
+                                }
+                                offset <= dismissLimit * 0.6f -> {
+                                    drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
+                                }
+                            }
+                        }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .swipeable(
+                            state = swipeableState,
+                            anchors = anchors,
+                            thresholds = { _, _ -> FractionalThreshold(0.5f) },
+                            orientation = Orientation.Horizontal,
+                            interactionSource = interactionSource,
+                            resistance = SwipeableDefaults.resistanceConfig(
+                                anchors = anchors.keys,
+                                factorAtMin = if (notiUnit.getPinned()) Float.POSITIVE_INFINITY else 0f,
+                                factorAtMax = 10f
+                            )
+                        )
+                        .animateItem()
+                        .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
+                ) {
+                    NotiCard(context, notiUnit, drawerViewModel)
+                }
+            }
+
+            if (listState.layoutInfo.visibleItemsInfo.any { it.key == notiUnit.notiKey }) {
+                LaunchedEffect(notiUnit.notiKey) {
+                    if (!notiUnit.getWholeNotiRead())
+                        seenItems.add(notiUnit.notiKey)
                 }
             }
         }
     }
 
-    val notiCount =  listState.firstVisibleItemIndex
-    + if (listState.firstVisibleItemScrollOffset > 0) 1 else 0
-
-    if (notiCount > 0 && listState.firstVisibleItemIndex > 0) {
+    val isAtTop by remember {
+        derivedStateOf { listState.firstVisibleItemIndex == 0 }
+    }
+    if (!isAtTop) {
+        val notiCount =  listState.firstVisibleItemIndex
+        + if (listState.firstVisibleItemScrollOffset > 0) 1 else 0
 
         val displayText = if (notSeenCount > 0) {
             "${minOf(notiCount, notSeenCount)} new notifications above"
@@ -264,14 +243,14 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
             snapshotFlow {
                 listState.layoutInfo.visibleItemsInfo
                     .mapNotNull { itemInfo ->
-                        if (itemInfo.index < lazyPagingItems.itemCount)
-                            lazyPagingItems.peek(itemInfo.index)
+                        if (itemInfo.index < notifications.size)
+                            notifications[itemInfo.index]
                         else
                             null
                     }
-                    .filter { notiUnit -> !notiUnit.notiSeen }
+                    .filter { notiUnit -> !notiUnit.getWholeNotiRead() }
                     .map { notiUnit ->
-                        notiUnit.sbnKey
+                        notiUnit.notiKey
                     }
             }.collect { seenIds ->
                 seenItems.addAll(seenIds)
@@ -287,7 +266,6 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
         val observer = LifecycleEventObserver { _, event ->
             if (event in leaveAppEvents) {
                 updateSeenNotifications(context, seenItems)
-                lazyPagingItems.refresh()
                 postOngoingNotification(context)
             }
         }
@@ -302,7 +280,6 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
     DisposableEffect(Unit) {
         onDispose {
             updateSeenNotifications(context, seenItems)
-            lazyPagingItems.refresh()
             postOngoingNotification(context)
         }
     }
@@ -314,7 +291,7 @@ fun updateSeenNotifications(context: Context, seenItems: Set<String>) {
         val drawerDatabase = DrawerDatabase.getInstance(context)
         val drawerDao = drawerDatabase.drawerDao()
         val newSeenNotis = drawerDao.getBySbnKeys(seenItems.toList())
-        newSeenNotis.forEachIndexed { idx, _ -> newSeenNotis[idx].notiSeen = true }
+        newSeenNotis.forEachIndexed { idx, _ -> newSeenNotis[idx].markAsRead() }
         drawerDao.updateList(newSeenNotis)
         postOngoingNotification(context)
     }

@@ -1,11 +1,9 @@
 package org.muilab.notigpt.model
 
 import android.app.Notification
-import android.app.Notification.MessagingStyle
 import android.app.Notification.MessagingStyle.Message.getMessagesFromBundleArray
 import android.app.Person
 import android.os.Build
-import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import androidx.annotation.RequiresApi
 
@@ -13,7 +11,8 @@ data class NotiInfo (
     val time: Long,
     val title: String,
     val person: String,
-    val content: String
+    val content: String,
+    var notiSeen: Boolean = false,
 ) {
 
     companion object {

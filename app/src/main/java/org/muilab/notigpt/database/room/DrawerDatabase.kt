@@ -5,11 +5,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import org.muilab.notigpt.model.NotiInfoTypeConverter
+import org.muilab.notigpt.model.NotiTypeConverters
 import org.muilab.notigpt.model.NotiUnit
 
 @Database(entities = [NotiUnit::class], version = 1)
-@TypeConverters(NotiInfoTypeConverter::class)
+@TypeConverters(NotiTypeConverters::class)
 abstract class DrawerDatabase : RoomDatabase() {
 
     abstract fun drawerDao(): DrawerDao

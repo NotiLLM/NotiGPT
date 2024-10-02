@@ -22,6 +22,8 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import org.muilab.notigpt.R
 import org.muilab.notigpt.model.NotiUnit
 import org.muilab.notigpt.util.getDisplayTimeStr
@@ -36,7 +38,7 @@ class GPTService: Service() {
 
     private var openAI: OpenAI
 //    val model = "gpt-3.5-turbo"
-    val model = "gpt-4"
+    val model = "gpt-4o-mini"
     private val dotenv = dotenv {
         directory = "./assets"
         filename = "env"
@@ -78,62 +80,73 @@ class GPTService: Service() {
         val notiChunks = arrayListOf<String>()
 
         val chunkSb = StringBuilder()
-        val notiSb = StringBuilder()
         notifications.forEach { noti ->
 
-            notiSb.append("<whole_noti>\n\n")
+            val isPeople = noti.getIsPeople()
+            val notiBody = noti.getNotiBody()
+            val prevBody = noti.getPrevBody()
 
-            notiSb.append("<id>${noti.hashKey}</id>\n")
-            // First Line: App & Title (If title is consistent)
-            notiSb.append("<app>${noti.appName}</app>\n")
+            val notiJson = JSONObject()
+            notiJson.put("id", noti.getHashKey())
+            notiJson.put("app", noti.getTitle())
 
-            val titlesIdentical = (noti.notiInfos + noti.prevNotiInfos)
+            val titlesIdentical = (notiBody + prevBody)
                 .map { it.title }
                 .filter { it.isNotBlank() }
                 .toSet().size == 1
-            val notiType = if (noti.isPeople) "message" else "info"
-            val notiTypeTitle = if (noti.isPeople) "sender" else "title"
+            val notiType = if (isPeople) "message" else "info"
+            val notiTypeTitle = if (isPeople) "sender" else "title"
 
-            notiSb.append("<overall_$notiTypeTitle>${org.muilab.notigpt.util.replaceChars(noti.title)}</overall_$notiTypeTitle>\n\n")
+            notiJson.put("overall_$notiTypeTitle", org.muilab.notigpt.util.replaceChars(noti.getTitle()))
 
-            val prevNotiInfos = noti.prevNotiInfos
-            if (prevNotiInfos.size > 0) {
-                notiSb.append("<previous_${notiType}s\n")
-                prevNotiInfos.forEach {
-                    notiSb.append("<$notiType>\n")
-                    notiSb.append("<time>${getDisplayTimeStr(it.time)}</time>")
+            if (prevBody.isNotEmpty()) {
+                val previousNotisArray = JSONArray()
+                prevBody.forEach {
+                    val prevNotiJson = JSONObject()
+                    prevNotiJson.put("time", getDisplayTimeStr(it.time))
                     if (!titlesIdentical)
-                        notiSb.append("<$notiTypeTitle>${org.muilab.notigpt.util.replaceChars(it.title)}</$notiTypeTitle>")
-                    notiSb.append("<content>${org.muilab.notigpt.util.replaceChars(it.content)}</content>\n")
-                    notiSb.append("<$notiType>\n")
+                        prevNotiJson.put(notiTypeTitle, org.muilab.notigpt.util.replaceChars(it.title))
+                    prevNotiJson.put("content", org.muilab.notigpt.util.replaceChars(it.content))
+                    previousNotisArray.put(prevNotiJson)
                 }
-                notiSb.append("</previous_${notiType}s>\n\n")
-                notiSb.append("<new_${notiType}s>\n")
+                notiJson.put("previous_${notiType}s", previousNotisArray)
+
+                val newNotisArray = JSONArray()
+
+                notiBody.forEach {
+                    val newNotiJson = JSONObject()
+                    newNotiJson.put("time", getDisplayTimeStr(it.time))
+                    if (!titlesIdentical)
+                        newNotiJson.put(notiTypeTitle, org.muilab.notigpt.util.replaceChars(it.title))
+                    newNotiJson.put("content", org.muilab.notigpt.util.replaceChars(it.content))
+                    newNotisArray.put(newNotiJson)
+                }
+                notiJson.put("new_${notiType}s", newNotisArray)
+            } else {
+                val notiInfosArray = JSONArray()
+
+                notiBody.forEach {
+                    val notiInfoJson = JSONObject()
+                    notiInfoJson.put("time", getDisplayTimeStr(it.time))
+                    if (!titlesIdentical)
+                        notiInfoJson.put(notiTypeTitle, org.muilab.notigpt.util.replaceChars(it.title))
+                    notiInfoJson.put("content", org.muilab.notigpt.util.replaceChars(it.content))
+                    notiInfosArray.put(notiInfoJson)
+                }
+                notiJson.put("${notiType}s", notiInfosArray)
             }
 
-            val notiInfos = noti.notiInfos
+            // Convert the JSON object to a string
+            val notiJsonStr = notiJson.toString(2)
 
-            notiInfos.forEach {
-                notiSb.append("<$notiType>\n")
-                notiSb.append("<time>${getDisplayTimeStr(it.time)}</time>")
-                if (!titlesIdentical)
-                    notiSb.append("<$notiTypeTitle>${org.muilab.notigpt.util.replaceChars(it.title)}</$notiTypeTitle>")
-                notiSb.append("<content>${org.muilab.notigpt.util.replaceChars(it.content)}</content>\n")
-                notiSb.append("<$notiType>\n")
-            }
-            if (prevNotiInfos.size > 0)
-                notiSb.append("</new_${notiType}s>\n")
-            notiSb.append("\n</whole_noti>\n\n\n")
-
-            if (chunkSb.length + notiSb.length > MAX_TOKEN) {
+            if (chunkSb.length + notiJsonStr.length > MAX_TOKEN) {
                 notiChunks.add(chunkSb.toString())
                 chunkSb.clear()
             }
-            chunkSb.append(notiSb.toString())
-            notiSb.clear()
+            chunkSb.append("$notiJsonStr,\n")
         }
         if (chunkSb.isNotEmpty())
-            notiChunks.add(chunkSb.toString())
+            notiChunks.add("[\n${chunkSb}]\n")
 
         return notiChunks
     }

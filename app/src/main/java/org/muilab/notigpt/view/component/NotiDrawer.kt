@@ -4,9 +4,15 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.snapTo
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,11 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.FractionalThreshold
-import androidx.compose.material.SwipeableDefaults
-import androidx.compose.material.rememberSwipeableState
-import androidx.compose.material.swipeable
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +42,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -59,7 +59,7 @@ import org.muilab.notigpt.viewModel.DrawerViewModel
 import kotlin.math.roundToInt
 
 @RequiresApi(Build.VERSION_CODES.S)
-@OptIn(ExperimentalMaterialApi::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: String) {
 
@@ -81,127 +81,99 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
             BoxWithConstraints {
 
                 val density = LocalDensity.current
-                val swipeableState = rememberSwipeableState(initialValue = 0)
                 val interactionSource = remember { MutableInteractionSource() }
-                val resistanceLimit = with(density) { 32.dp.toPx() }  // Convert to pixels
-                val dismissLimit = -constraints.maxWidth.toFloat()
+                val resistanceLimit = with(density) { 64.dp.toPx() }  // Convert to pixels
+                val dismissLimit = -0.5f * constraints.maxWidth.toFloat()
                 var pinningChanged by remember { mutableStateOf(false) }
 
-                // Setup anchors for swipeable states: 0 for initial, right for resistance, left for dismiss
-                val anchors = if (notiUnit.getPinned())
-                    mapOf(
-                        0f to 0,
-                        resistanceLimit to 1
+                val anchoredDraggableState = remember {
+                    AnchoredDraggableState(
+                        initialValue = 0,
+                        anchors = DraggableAnchors {
+                            0 at 0f
+                            1 at resistanceLimit
+                        },
+                        positionalThreshold = { d -> d * 0.5f },
+                        velocityThreshold = { Float.POSITIVE_INFINITY },
+                        snapAnimationSpec = tween(),
+                        decayAnimationSpec = exponentialDecay(0.00001f, 0.00001f)
                     )
-                else
-                    mapOf(
-                        0f to 0,
-                        resistanceLimit to 1,
-                        dismissLimit to -1
-                    )
+                }
 
                 // A flag to prevent re-triggering the snap back
                 var isBackAnimationTriggered by remember { mutableStateOf(false) }
 
                 // Reset the flag when the user starts dragging again
-                if (swipeableState.isAnimationRunning) {
+                if (anchoredDraggableState.isAnimationRunning) {
                     isBackAnimationTriggered = false
                 }
 
-                LaunchedEffect(swipeableState, interactionSource, isBackAnimationTriggered) {
-                    Log.d("Swipe", "${notiUnit.getTitle()}: $isBackAnimationTriggered")
-                    interactionSource.interactions.collect { interaction ->
-                        when (interaction) {
-                            is DragInteraction.Stop -> {
-                                if ((swipeableState.offset.value >= 32 || swipeableState.currentValue == 1) && !pinningChanged) {
-                                    pinningChanged = true
-                                    swipeableState.snapTo(0)
-                                    drawerViewModel.actOnNoti(notiUnit, "pin")
-                                    pinningChanged = false
-                                }
-                                if (swipeableState.offset.value <= dismissLimit * 0.9f) {
-                                    drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
-                                }
-                                if (swipeableState.currentValue != -1 && !swipeableState.isAnimationRunning && !isBackAnimationTriggered) {
-                                    swipeableState.animateTo(0)
-                                    isBackAnimationTriggered = true  // Set flag to prevent re-triggering
-                                }
+                LaunchedEffect(anchoredDraggableState.currentValue) {
+                    when (anchoredDraggableState.currentValue) {
+                        1 -> {
+                            if (!pinningChanged) {
+                                pinningChanged = true
+                                drawerViewModel.actOnNoti(notiUnit, "pin")
+                                anchoredDraggableState.snapTo(0)
                             }
+                        }
+
+                        -1 -> {
+                            drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
                         }
                     }
                 }
 
-                LaunchedEffect(swipeableState) {
-                    snapshotFlow { swipeableState.currentValue }
-                        .collect { currentValue ->
-                            when (currentValue) {
-                                1 -> {
-                                    if (!pinningChanged) {
-                                        pinningChanged = true
-                                        swipeableState.snapTo(0)
-                                        drawerViewModel.actOnNoti(notiUnit, "pin")
-                                        pinningChanged = false
-                                    }
-                                }
-                                -1 -> {
-                                    drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
-                                }
+                LaunchedEffect(notiUnit.getPinned()) {
+                    pinningChanged = false
+                    if (notiUnit.getPinned()) {
+                        anchoredDraggableState.updateAnchors(
+                            DraggableAnchors {
+                                0 at 0f
+                                1 at resistanceLimit
                             }
-                        }
-                    snapshotFlow { swipeableState.offset.value }
-                        .collect { offset ->
-                            when {
-                                offset >= resistanceLimit * 0.9f -> {
-                                    if (!pinningChanged) {
-                                        pinningChanged = true
-                                        swipeableState.snapTo(0)
-                                        drawerViewModel.actOnNoti(notiUnit, "pin")
-                                        pinningChanged = false
-                                    }
-                                }
-                                offset <= dismissLimit * 0.6f -> {
-                                    drawerViewModel.actOnNoti(notiUnit, "swipe_dismiss")
-                                }
+                        )
+                    } else {
+                        anchoredDraggableState.updateAnchors(
+                            DraggableAnchors {
+                                (-1) at dismissLimit
+                                0 at 0f
+                                1 at resistanceLimit
                             }
-                        }
+                        )
+                    }
                 }
 
                 Box(
                     modifier = Modifier
-                        .swipeable(
-                            state = swipeableState,
-                            anchors = anchors,
-                            thresholds = { _, _ -> FractionalThreshold(0.5f) },
+                        .anchoredDraggable(
+                            state = anchoredDraggableState,
                             orientation = Orientation.Horizontal,
                             interactionSource = interactionSource,
-                            resistance = SwipeableDefaults.resistanceConfig(
-                                anchors = anchors.keys,
-                                factorAtMin = if (notiUnit.getPinned()) Float.POSITIVE_INFINITY else 0f,
-                                factorAtMax = 10f
-                            )
                         )
                         .animateItem()
-                        .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
+                        .offset {
+                            IntOffset(
+                                anchoredDraggableState
+                                    .requireOffset()
+                                    .roundToInt(), 0
+                            )
+                        }
                 ) {
                     NotiCard(context, notiUnit, drawerViewModel)
-                }
-            }
-
-            if (listState.layoutInfo.visibleItemsInfo.any { it.key == notiUnit.notiKey }) {
-                LaunchedEffect(notiUnit.notiKey) {
-                    if (!notiUnit.getWholeNotiRead())
-                        seenItems.add(notiUnit.notiKey)
                 }
             }
         }
     }
 
-    val isAtTop by remember {
-        derivedStateOf { listState.firstVisibleItemIndex == 0 }
+    val firstVisibleIndex by remember {
+        derivedStateOf { listState.firstVisibleItemIndex }
     }
-    if (!isAtTop) {
-        val notiCount =  listState.firstVisibleItemIndex
-        + if (listState.firstVisibleItemScrollOffset > 0) 1 else 0
+    val scrollOffset by remember {
+        derivedStateOf { listState.firstVisibleItemScrollOffset }
+    }
+    if (firstVisibleIndex > 0) {
+        val notiCount = firstVisibleIndex + if (scrollOffset > 0) 1 else 0
 
         val displayText = if (notSeenCount > 0) {
             "${minOf(notiCount, notSeenCount)} new notifications above"
@@ -258,7 +230,7 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
         }
     }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val leaveAppEvents = setOf(
             Lifecycle.Event.ON_PAUSE
@@ -275,6 +247,15 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    val visibleItems = remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo } }
+    LaunchedEffect(visibleItems) {
+        seenItems.addAll(
+            visibleItems.value
+                .filter { it.offset >= 0 && (it.offset + it.size) <= listState.layoutInfo.viewportEndOffset }
+                .map { it.key.toString() }
+        )
     }
 
     DisposableEffect(Unit) {

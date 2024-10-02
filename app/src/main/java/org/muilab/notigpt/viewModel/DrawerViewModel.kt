@@ -26,10 +26,10 @@ import org.muilab.notigpt.util.postOngoingNotification
 
 class DrawerViewModel(
     application: Application,
-    private val notiRepository: NotiRepository
+    notiRepository: NotiRepository
 ) : AndroidViewModel(application) {
 
-    val notifications: StateFlow<List<NotiUnit>> = notiRepository.getNotificationsFlow()
+    private val notifications: StateFlow<List<NotiUnit>> = notiRepository.getNotificationsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val notSeenCount: LiveData<Int> = notiRepository.notSeenCount
@@ -46,7 +46,7 @@ class DrawerViewModel(
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
             "social" -> notifications.map { notiList: List<NotiUnit> ->
                 notiList.filter { notiUnit: NotiUnit ->
-                    notiUnit.getAppName() in listOf("Facebook", "Instagram", "Line", "Messenger", "Slack")
+                    notiUnit.getAppName() in listOf("Facebook", "Instagram", "LINE", "Messenger", "Slack")
                 }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
             "email" -> notifications.map { notiList: List<NotiUnit> ->
@@ -126,7 +126,7 @@ class DrawerViewModel(
 
                 notiJson.put("overall_$notiTypeTitle", org.muilab.notigpt.util.replaceChars(noti.getTitle()))
 
-                if (prevBody.isNotEmpty()) {
+                if (prevBody.isNotEmpty() && includeContext) {
                     val previousNotisArray = JSONArray()
                     prevBody.forEach {
                         val prevNotiJson = JSONObject()

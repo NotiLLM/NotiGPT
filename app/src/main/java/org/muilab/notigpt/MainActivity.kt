@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.net.Uri
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.Settings
@@ -51,6 +52,19 @@ class MainActivity : ComponentActivity() {
             }
             startActivity(intent)
         }
+
+        if (!isBatteryOptimizationsIgnored()) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            try {
+                if (intent.resolveActivity(packageManager) != null)
+                    startActivity(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
 
         if (isNotiListenerEnabled()) {
             val notiListenerIntent = Intent(this@MainActivity, NotiListenerService::class.java)
@@ -102,6 +116,11 @@ class MainActivity : ComponentActivity() {
         val flat: String? =
             Settings.Secure.getString(this.contentResolver, "enabled_notification_listeners")
         return (flat != null) && (cn.flattenToString() in flat)
+    }
+
+    fun isBatteryOptimizationsIgnored(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
     }
 
     private fun isServiceRunning(context: Context, serviceClass: Class<*>): Boolean {

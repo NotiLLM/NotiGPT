@@ -78,6 +78,19 @@ data class NotiUnit(
         }
     }
 
+    fun markInfosAsRead(seenInfos: Set<Long>) {
+        var checkAllRead = true
+        for (notiInfo in body.notiInfos) {
+            for (infoTime in seenInfos)
+                if (infoTime == notiInfo.time)
+                    notiInfo.notiSeen = true
+            if (!notiInfo.notiSeen)
+                checkAllRead = false
+        }
+        if (checkAllRead)
+            body.wholeNotiRead = true
+    }
+
     fun getNotiBody(): List<NotiInfo> {
         return body.notiInfos.toList()
     }

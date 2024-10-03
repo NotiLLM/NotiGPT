@@ -2,7 +2,6 @@ package org.muilab.notigpt.view.component
 
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.tween
@@ -39,7 +38,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -68,7 +66,8 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
     val coroutineScope = rememberCoroutineScope()
 
     val notifications by drawerViewModel.getFilteredFlow(category).collectAsState()
-    val seenItems = remember { mutableSetOf<String>() }
+    val seenNotis = remember { mutableSetOf<String>() }
+    val seenInfos = remember { mutableMapOf<String, Set<Long>>() }
 
     LazyColumn(
         state = listState,
@@ -160,7 +159,19 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
                             )
                         }
                 ) {
-                    NotiCard(context, notiUnit, drawerViewModel)
+                    val notiViewed = remember { mutableStateOf(false) }
+                    val viewedInfos = remember { mutableSetOf<Long>() }
+                    NotiCard(context, notiUnit, drawerViewModel, notiViewed, viewedInfos)
+
+                    LaunchedEffect(notiViewed) {
+                        seenNotis.add(notiUnit.notiKey)
+                    }
+                    LaunchedEffect(viewedInfos) {
+                        if (viewedInfos.isNotEmpty())
+                            seenInfos[notiUnit.notiKey] = viewedInfos
+                        else
+                            seenInfos.remove(notiUnit.notiKey)
+                    }
                 }
             }
         }
@@ -210,26 +221,6 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
         onPause = { isForeground = false }
     )
 
-    if (isForeground) {
-        LaunchedEffect(listState) {
-            snapshotFlow {
-                listState.layoutInfo.visibleItemsInfo
-                    .mapNotNull { itemInfo ->
-                        if (itemInfo.index < notifications.size)
-                            notifications[itemInfo.index]
-                        else
-                            null
-                    }
-                    .filter { notiUnit -> !notiUnit.getWholeNotiRead() }
-                    .map { notiUnit ->
-                        notiUnit.notiKey
-                    }
-            }.collect { seenIds ->
-                seenItems.addAll(seenIds)
-            }
-        }
-    }
-
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val leaveAppEvents = setOf(
@@ -237,7 +228,7 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
         )
         val observer = LifecycleEventObserver { _, event ->
             if (event in leaveAppEvents) {
-                updateSeenNotifications(context, seenItems)
+                updateSeenNotifications(context, seenNotis, seenInfos)
                 postOngoingNotification(context)
             }
         }
@@ -249,31 +240,30 @@ fun NotiDrawer(context: Context, drawerViewModel: DrawerViewModel, category: Str
         }
     }
 
-    val visibleItems = remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo } }
-    LaunchedEffect(visibleItems) {
-        seenItems.addAll(
-            visibleItems.value
-                .filter { it.offset >= 0 && (it.offset + it.size) <= listState.layoutInfo.viewportEndOffset }
-                .map { it.key.toString() }
-        )
-    }
-
     DisposableEffect(Unit) {
         onDispose {
-            updateSeenNotifications(context, seenItems)
+            updateSeenNotifications(context, seenNotis, seenInfos)
             postOngoingNotification(context)
         }
     }
 }
 
 @RequiresApi(Build.VERSION_CODES.S)
-fun updateSeenNotifications(context: Context, seenItems: Set<String>) {
+fun updateSeenNotifications(context: Context, seenNotis: Set<String>, seenInfos: Map<String, Set<Long>>) {
     CoroutineScope(Dispatchers.IO).launch {
         val drawerDatabase = DrawerDatabase.getInstance(context)
         val drawerDao = drawerDatabase.drawerDao()
-        val newSeenNotis = drawerDao.getBySbnKeys(seenItems.toList())
+
+        val newSeenNotis = drawerDao.getBySbnKeys(seenNotis.toList())
         newSeenNotis.forEachIndexed { idx, _ -> newSeenNotis[idx].markAsRead() }
         drawerDao.updateList(newSeenNotis)
+
+        val notisWithNewSeenInfos = drawerDao.getBySbnKeys(seenInfos.keys.toList())
+        notisWithNewSeenInfos.forEachIndexed { idx, notiUnit ->
+            notisWithNewSeenInfos[idx].markInfosAsRead(seenInfos[notiUnit.notiKey]!!)
+        }
+        drawerDao.updateList(notisWithNewSeenInfos)
+
         postOngoingNotification(context)
     }
 }

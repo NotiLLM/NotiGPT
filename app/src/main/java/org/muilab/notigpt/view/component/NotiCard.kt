@@ -25,14 +25,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -46,8 +43,10 @@ import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -59,7 +58,9 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -69,6 +70,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.constraintlayout.compose.ConstraintLayout
+import androidx.constraintlayout.compose.Dimension
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.R
@@ -84,10 +87,12 @@ import kotlin.math.abs
 @OptIn(ExperimentalFoundationApi::class)
 @RequiresApi(Build.VERSION_CODES.S)
 @Composable
-fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewModel) {
+fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewModel, notiViewed: MutableState<Boolean>, viewedInfos: MutableSet<Long>) {
 
-    Log.d("NotiRecompose", "NotiCard: ${notiUnit.getTitle()}")
+    var notiTopViewed by remember { mutableStateOf(false) }
+    var notiBottomViewed by remember { mutableStateOf(false) }
 
+    notiUnit.notiKey
     val pinned = notiUnit.getPinned()
     val wholeNotiRead = notiUnit.getWholeNotiRead()
     val notiOverallTitle = notiUnit.getTitle()
@@ -115,7 +120,13 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                     .let { notiOverallTitle.isNotBlank() && notiOverallTitle != it }))
     }
 
-    var maxContentHeight by remember { mutableFloatStateOf(0f) }
+
+    var contentHeightPx by remember { mutableIntStateOf(0) }
+    var latestMessageHeightPx by remember { mutableIntStateOf(0) }
+    var maxContentHeightPx by remember { mutableFloatStateOf(0f) }
+    val maxHeightDp = 200.dp
+    val notiInfoGapDp = 4.dp
+
     val expansionProgress: (Float, Float) -> Float = { offset, maxHeight ->
         offset.coerceIn(0F, maxHeight) / maxOf(maxHeight, 1F)
     }
@@ -123,22 +134,21 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
 
     val coroutineScope = rememberCoroutineScope()
 
-    val anchors = DraggableAnchors {
-        NotiExpandState.Collapsed at 0f
-        NotiExpandState.Opened at maxContentHeight
-    }
     val density = LocalDensity.current
     val anchoredDraggableState = remember {
         AnchoredDraggableState(
             initialValue = NotiExpandState.Collapsed,
-            anchors = anchors,
-            positionalThreshold = {distance: Float -> distance * 0.5f},
+            anchors = DraggableAnchors {
+                NotiExpandState.Collapsed at 0f
+                NotiExpandState.Opened at maxContentHeightPx
+            },
+            positionalThreshold = { distance: Float -> distance * 0.5f },
             snapAnimationSpec = spring(
                 dampingRatio = Spring.DampingRatioLowBouncy,
                 stiffness = Spring.StiffnessLow,
             ),
             decayAnimationSpec = exponentialDecay(),
-            velocityThreshold = { with(density) { 80.dp.toPx()} }
+            velocityThreshold = { with(density) { 80.dp.toPx() } }
         )
     }
 
@@ -169,10 +179,11 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                 if (hasStartedDragging && isInitialDragDownward) {
                     coroutineScope.launch {
                         anchoredDraggableState.animateTo(
-                            if (anchoredDraggableState.offset > COLLAPSE_THRESHOLD)
+                            if (anchoredDraggableState.offset > COLLAPSE_THRESHOLD) {
                                 NotiExpandState.Opened
-                            else
+                            } else {
                                 NotiExpandState.Collapsed
+                            }
                         )
                     }
                 }
@@ -209,7 +220,15 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                 onLongClick = {
                     isDropdownMenuExpanded = true
                 }
-            ),
+            )
+            .onGloballyPositioned { coordinates ->
+                val windowBounds = coordinates.boundsInWindow()
+                notiTopViewed = notiTopViewed || windowBounds.top >= 0 && windowBounds.top < windowBounds.height
+            }
+            .onGloballyPositioned { coordinates ->
+                val windowBounds = coordinates.boundsInWindow()
+                notiBottomViewed = notiBottomViewed || windowBounds.bottom > 0 && windowBounds.bottom <= windowBounds.height
+            },
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = backgroundColor
@@ -249,7 +268,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
         }
         //**
 
-        val progress = expansionProgress(anchoredDraggableState.offset, maxContentHeight)
+        val progress = expansionProgress(anchoredDraggableState.offset, maxContentHeightPx)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -417,10 +436,11 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                                         if (!hasStartedDragging) {
                                             coroutineScope.launch {
                                                 anchoredDraggableState.animateTo(
-                                                    if (anchoredDraggableState.offset < COLLAPSE_THRESHOLD)
+                                                    if (anchoredDraggableState.offset < COLLAPSE_THRESHOLD) {
                                                         NotiExpandState.Opened
-                                                    else
+                                                    } else {
                                                         NotiExpandState.Collapsed
+                                                    }
                                                 )
                                             }
                                         }
@@ -433,166 +453,235 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                     Spacer(modifier = Modifier.padding(5.dp))
                 }
 
-                if (requiresExpansion)
-                    SubcomposeLayout(Modifier.clipToBounds()) { constraints ->
-                        val content = subcompose("content") {
+                if (requiresExpansion) {
 
-                            HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 5.dp),
-                                thickness = 1.dp,
-                                color = Color.White
-                            )
+                    // Update maxContentHeightPx based on contentHeightPx
+                    LaunchedEffect(contentHeightPx) {
+                        val maxHeightPx = with(density) { maxHeightDp.toPx() }
+                        maxContentHeightPx = minOf(contentHeightPx.toFloat(), maxHeightPx)
+                        anchoredDraggableState.updateAnchors(
+                            DraggableAnchors {
+                                NotiExpandState.Collapsed at 0f
+                                NotiExpandState.Opened at maxContentHeightPx
+                            }
+                        )
+                    }
 
-                            val isGroup = (listOf(notiOverallTitle)
-                                    + notiBody.map { it.getTitle(pkgName, isPeople) })
-                                .filter { it.isNotBlank() }
-                                .toSet().size > 1
+                    val currentHeightPx = anchoredDraggableState.offset.coerceIn(0f, maxContentHeightPx)
 
-                            val listState = rememberLazyListState(
-                                initialFirstVisibleItemIndex = maxOf(
-                                    notiBody.size - 1,
-                                    0
-                                )
-                            )
+                    Column(
+                        modifier = Modifier
+                            .height(with(density) { currentHeightPx.toDp() })
+                            .clipToBounds()
+                    ) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 5.dp),
+                            thickness = 1.dp,
+                            color = Color.White
+                        )
 
-                            LazyColumn(
-                                modifier = Modifier
-                                    .heightIn(0.dp, 200.dp),
-                                state = listState
-                            ) {
+                        // Scrollable content
+                        val scrollState = rememberScrollState()
 
-                                itemsIndexed(notiBody, key = { _, noti -> noti.time} ) { idx, noti ->
+                        val isGroup = (listOf(notiOverallTitle)
+                                + notiBody.map { it.getTitle(pkgName, isPeople) })
+                                    .filter { it.isNotBlank() }
+                                    .toSet().size > 1
 
-                                    val notiTitle = noti.getTitle(
-                                        pkgName,
-                                        isPeople
-                                    )
-                                    val prevTitle = if (idx == 0)
-                                        notiOverallTitle
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(scrollState)
+                                .onSizeChanged { size ->
+                                    contentHeightPx = size.height
+                                }
+                        ) {
+                            notiBody.forEachIndexed { idx, noti ->
+
+                                val notiTitle = noti.getTitle(pkgName, isPeople)
+                                val prevTitle = if (idx == 0)
+                                       notiOverallTitle
                                     else
-                                        notiBody[idx - 1].getTitle(
-                                            pkgName,
-                                            isPeople
+                                        notiBody[idx - 1].getTitle(pkgName, isPeople)
+                                val notiTime = noti.time
+                                val notiContent = noti.content
+                                val notiSeen = noti.notiSeen
+                                val newTitle = (notiTitle != prevTitle && notiTitle.isNotBlank() && prevTitle.isNotBlank())
+                                val showTitle = isGroup && newTitle
+
+                                val infoTimeColor = when {
+                                    !notiSeen -> MaterialTheme.colorScheme.error
+                                    pinned -> MaterialTheme.colorScheme.tertiary
+                                    else -> MaterialTheme.colorScheme.surfaceVariant
+                                }
+
+                                if (showTitle)
+                                    Spacer(modifier = Modifier.height(notiInfoGapDp))
+
+                                if (idx == notiBody.size - 1) {
+                                    Box(
+                                        modifier = Modifier.onSizeChanged { size -> latestMessageHeightPx = size.height }
+                                    ) {
+                                        ExpandedNotiInfo(
+                                            notiTitle,
+                                            notiTime,
+                                            notiContent,
+                                            notiSeen,
+                                            showTitle,
+                                            infoTimeColor,
+                                            viewedInfos
                                         )
-                                    val notiTime = noti.time
-                                    val notiContent = noti.content
-                                    val notiSeen = noti.notiSeen
-                                    val newTitle = (notiTitle != prevTitle && notiTitle.isNotBlank() && prevTitle.isNotBlank())
-                                    val showTitle = isGroup && newTitle
-
-                                    if (newTitle)
-                                        Spacer(modifier = Modifier.height(4.dp))
-
-                                    val infoTimeColor = when {
-                                        !notiSeen -> MaterialTheme.colorScheme.error
-                                        pinned -> MaterialTheme.colorScheme.tertiary
-                                        else -> MaterialTheme.colorScheme.surfaceVariant
                                     }
-
-                                    Row(Modifier.fillMaxWidth()) {
-                                        Text(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .padding(start = 5.dp)
-                                                .background(Color.Transparent),
-                                            text = if (showTitle) {
-                                                if (notiTitle == "null") "" else notiTitle
-                                            } else {
-                                                if (notiContent == "null") "" else notiContent
-                                            },
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                fontSize = 14.sp,
-                                                fontWeight = if (showTitle)
-                                                    FontWeight.Bold
-                                                else
-                                                    FontWeight.Normal
-                                            )
-                                        )
-                                        if (!showTitle) {
-
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(infoTimeColor, RoundedCornerShape(16.dp))
-                                            ) {
-                                                Text(
-                                                    modifier = Modifier
-                                                        .wrapContentWidth()
-                                                        .background(Color.Transparent),
-                                                    text = getDisplayTimeStr(notiTime),
-                                                    style = MaterialTheme.typography.bodySmall.copy(
-                                                        fontSize = 12.sp,
-                                                        fontStyle = FontStyle.Italic
-                                                    ),
-                                                    color = contentColorFor(infoTimeColor)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.padding(horizontal = 5.dp))
-                                    }
-
-                                    if (showTitle) {
-                                        Row(Modifier.fillMaxWidth()) {
-                                            Text(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .padding(horizontal = 5.dp)
-                                                    .background(Color.Transparent),
-                                                text = if (notiContent == "null") "" else notiContent,
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    fontSize = 14.sp
-                                                )
-                                            )
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(infoTimeColor, RoundedCornerShape(16.dp))
-                                            ) {
-                                                Text(
-                                                    modifier = Modifier
-                                                        .wrapContentWidth()
-                                                        .background(Color.Transparent),
-                                                    text = getDisplayTimeStr(notiTime),
-                                                    style = MaterialTheme.typography.bodySmall.copy(
-                                                        fontSize = 12.sp,
-                                                        fontStyle = FontStyle.Italic
-                                                    ),
-                                                    color = contentColorFor(infoTimeColor)
-                                                )
-                                            }
-                                            Spacer(
-                                                modifier = Modifier.padding(
-                                                    horizontal = 5.dp
-                                                )
-                                            )
-                                        }
-                                    }
+                                    Spacer(modifier = Modifier.height(notiInfoGapDp))
+                                } else {
+                                    ExpandedNotiInfo(
+                                        notiTitle,
+                                        notiTime,
+                                        notiContent,
+                                        notiSeen,
+                                        showTitle,
+                                        infoTimeColor,
+                                        viewedInfos
+                                    )
                                 }
                             }
                         }
 
-                        val contentMeasures = content.map { it.measure(constraints) }
-                        if (contentMeasures.maxOf { it.height }
-                                .toFloat() > maxContentHeight) {
-                            maxContentHeight =
-                                contentMeasures.maxOf { it.height }.toFloat()
-                            anchoredDraggableState.updateAnchors(
-                                DraggableAnchors {
-                                    NotiExpandState.Collapsed at 0f
-                                    NotiExpandState.Opened at maxContentHeight
+                        // Scroll to the appropriate position based on requirements
+                        LaunchedEffect(contentHeightPx, maxContentHeightPx, latestMessageHeightPx) {
+                            val maxHeightPx = with(density) { maxHeightDp.toPx() }
+                            val notiInfoGapPx = with(density) { notiInfoGapDp.toPx() }
+                            if (contentHeightPx > maxHeightPx) {
+                                val targetScroll = if (latestMessageHeightPx >= maxHeightPx) {
+                                    contentHeightPx - latestMessageHeightPx - notiInfoGapPx
+                                } else {
+                                    contentHeightPx - maxHeightPx - notiInfoGapPx
                                 }
-                            )
-                        }
-                        val currentHeight =
-                            anchoredDraggableState.offset.coerceIn(0F, maxContentHeight)
-                                .toInt()
-                        layout(constraints.maxWidth, currentHeight) {
-                            val yOffset =
-                                currentHeight - maxContentHeight.toInt()  // Position content at the bottom
-                            contentMeasures.forEach { it.place(0, yOffset) }
+                                scrollState.scrollTo(maxOf(targetScroll.toInt(), 0))
+                            } else {
+                                scrollState.scrollTo(0)
+                            }
                         }
                     }
+                }
             }
         }
     }
+
+    LaunchedEffect(notiTopViewed, notiBottomViewed) {
+        if (notiTopViewed && notiBottomViewed && !notiUnit.getWholeNotiRead() && !requiresExpansion) {
+            notiViewed.value = true
+            for (noti in notiBody)
+                noti.notiSeen = true
+            viewedInfos.clear()
+        }
+    }
+}
+
+@Composable
+fun ExpandedNotiInfo(
+    notiTitle: String,
+    notiTime: Long,
+    notiContent: String,
+    notiSeen: Boolean,
+    showTitle: Boolean,
+    infoTimeColor: Color,
+    viewedInfos: MutableSet<Long>
+) {
+
+    var infoTopViewed by remember { mutableStateOf(false) }
+    var infoBottomViewed by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier
+            .onGloballyPositioned { coordinates ->
+                val windowBounds = coordinates.boundsInWindow()
+                infoTopViewed = infoTopViewed || windowBounds.top >= 0 && windowBounds.top < windowBounds.height
+            }
+            .onGloballyPositioned { coordinates ->
+                val windowBounds = coordinates.boundsInWindow()
+                infoBottomViewed = infoBottomViewed || windowBounds.bottom > 0 && windowBounds.bottom <= windowBounds.height
+            }
+    ) {
+        ConstraintLayout (Modifier.fillMaxWidth()) {
+            val (leftText, rightText) = createRefs()
+            val leftTextModifier = Modifier
+                .constrainAs(leftText) {
+                    start.linkTo(parent.start)
+                    end.linkTo(rightText.start)
+                    top.linkTo(parent.top)
+                    width = Dimension.fillToConstraints
+                }
+            val rightTextModifier = Modifier
+                .constrainAs(rightText) {
+                    end.linkTo(parent.end)
+                    top.linkTo(parent.top)
+                }
+            if (showTitle)
+                NotiInfoTitle(notiTitle, leftTextModifier)
+            else
+                NotiInfoContent(notiContent, leftTextModifier)
+            NotiInfoTime(notiTime, infoTimeColor, rightTextModifier)
+        }
+        if (showTitle)
+            NotiInfoContent(notiContent)
+    }
+
+    LaunchedEffect(infoTopViewed, infoBottomViewed) {
+        if (infoTopViewed && infoBottomViewed && !notiSeen) {
+            viewedInfos.add(notiTime)  // Mark the item as viewed once fully revealed
+        }
+    }
+}
+
+@Composable
+fun NotiInfoTitle(notiTitle: String, modifier: Modifier = Modifier) {
+    Text(
+        modifier = Modifier
+            .padding(start = 5.dp)
+            .then(modifier),
+        text = if (notiTitle == "null") "" else notiTitle,
+        style = MaterialTheme.typography.bodySmall.copy(
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+        )
+    )
+}
+
+@Composable
+fun NotiInfoTime(notiTime: Long, infoTimeColor: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier = Modifier
+            .background(
+                infoTimeColor,
+                RoundedCornerShape(16.dp)
+            )
+            .then(modifier)
+    ) {
+        Text(
+            modifier = Modifier
+                .padding(horizontal = 5.dp),
+            text = getDisplayTimeStr(notiTime),
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 12.sp,
+                fontStyle = FontStyle.Italic
+            ),
+            color = contentColorFor(infoTimeColor)
+        )
+    }
+}
+
+@Composable
+fun NotiInfoContent(notiContent: String, modifier: Modifier = Modifier) {
+    Text(
+        modifier = Modifier
+            .padding(horizontal = 5.dp)
+            .then(modifier),
+        text = if (notiContent == "null") "" else notiContent,
+        style = MaterialTheme.typography.bodySmall.copy(
+            fontSize = 14.sp
+        )
+    )
 }
 
 @Composable

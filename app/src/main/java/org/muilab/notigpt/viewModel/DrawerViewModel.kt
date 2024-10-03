@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import org.muilab.notigpt.database.room.DrawerDatabase
-import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.model.notifications.NotiUnit
 import org.muilab.notigpt.paging.NotiRepository
 import org.muilab.notigpt.util.getDisplayTimeStr
 import org.muilab.notigpt.util.getNotifications

@@ -11,15 +11,15 @@ import org.muilab.notigpt.view.component.TabContent
 import org.muilab.notigpt.view.component.TabLayout
 import org.muilab.notigpt.view.component.getTabList
 import org.muilab.notigpt.viewModel.DrawerViewModel
-import org.muilab.notigpt.viewModel.GPTViewModel
+import org.muilab.notigpt.viewModel.GeminiViewModel
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun MainScreen(context: Context, drawerViewModel: DrawerViewModel, gptViewModel: GPTViewModel) {
+fun MainScreen(context: Context, drawerViewModel: DrawerViewModel, geminiViewModel: GeminiViewModel) {
     val tabData = getTabList()
     val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabData.size })
     Column(modifier = Modifier.fillMaxSize()) {
         TabLayout(tabData, pagerState)
-        TabContent(tabData, pagerState, context, drawerViewModel, gptViewModel)
+        TabContent(tabData, pagerState, context, drawerViewModel, geminiViewModel)
     }
 }

@@ -1,4 +1,4 @@
-package org.muilab.notigpt.model
+package org.muilab.notigpt.model.notifications
 
 data class NotiFeature(
     val featureString: String

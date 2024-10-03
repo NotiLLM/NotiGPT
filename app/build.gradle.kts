@@ -1,7 +1,10 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
 }
 
 android {
@@ -19,6 +22,14 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        val localProperties = Properties().apply {
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use { load(it) }
+            }
+        }
+        buildConfigField("String", "apiKey", "\"${localProperties["apiKey"]}\"")
     }
 
     buildTypes {
@@ -39,6 +50,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.3"
@@ -87,7 +99,6 @@ dependencies {
 
     // OpenAI
     val ktorVersion = "2.3.11"
-    implementation("com.aallam.openai:openai-client:3.7.2")
     implementation("io.ktor:ktor-client-android:$ktorVersion")
 
     // dotenv
@@ -104,7 +115,7 @@ dependencies {
     implementation("com.github.nanihadesuka:LazyColumnScrollbar:2.0.7")
 
     implementation("com.google.code.gson:gson:2.10.1")
-
-    implementation("com.google.mlkit:entity-extraction:16.0.0-beta5")
     implementation("androidx.constraintlayout:constraintlayout-compose:1.0.1")
+
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 }

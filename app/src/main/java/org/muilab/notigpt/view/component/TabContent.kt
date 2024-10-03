@@ -8,14 +8,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.vector.ImageVector
 import org.muilab.notigpt.view.screen.HomeScreen
-import org.muilab.notigpt.view.screen.SettingsScreen
 import org.muilab.notigpt.viewModel.DrawerViewModel
-import org.muilab.notigpt.viewModel.GPTViewModel
+import org.muilab.notigpt.viewModel.GeminiViewModel
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -24,14 +22,14 @@ fun TabContent(
     pagerState: PagerState,
     context: Context,
     drawerViewModel: DrawerViewModel,
-    gptViewModel: GPTViewModel
+    geminiViewModel: GeminiViewModel
 ) {
     HorizontalPager(state = pagerState) { index ->
         when (index) {
-            0 -> HomeScreen(context, drawerViewModel, gptViewModel, category="all")
-            1 -> HomeScreen(context, drawerViewModel, gptViewModel, category="pinned")
-            2 -> HomeScreen(context, drawerViewModel, gptViewModel, category="social")
-            3 -> HomeScreen(context, drawerViewModel, gptViewModel, category="email")
+            0 -> HomeScreen(context, drawerViewModel, geminiViewModel, category="all")
+            1 -> HomeScreen(context, drawerViewModel, geminiViewModel, category="pinned")
+            2 -> HomeScreen(context, drawerViewModel, geminiViewModel, category="social")
+            3 -> HomeScreen(context, drawerViewModel, geminiViewModel, category="email")
         }
     }
 

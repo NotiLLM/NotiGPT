@@ -1,4 +1,4 @@
-package org.muilab.notigpt.model
+package org.muilab.notigpt.model.notifications
 
 import androidx.room.TypeConverter
 import com.google.gson.Gson

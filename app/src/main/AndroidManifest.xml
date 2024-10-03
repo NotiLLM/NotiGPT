@@ -40,7 +40,7 @@
         </receiver>
 
         <service
-            android:name=".service.GPTService"
+            android:name=".service.GeminiService"
             android:enabled="true"
             android:exported="true" />
 

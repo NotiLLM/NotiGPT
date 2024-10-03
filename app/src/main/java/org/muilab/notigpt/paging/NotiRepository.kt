@@ -3,7 +3,7 @@ package org.muilab.notigpt.paging
 import androidx.lifecycle.LiveData
 import kotlinx.coroutines.flow.Flow
 import org.muilab.notigpt.database.room.DrawerDao
-import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.model.notifications.NotiUnit
 
 class NotiRepository(private val drawerDao: DrawerDao) {
 

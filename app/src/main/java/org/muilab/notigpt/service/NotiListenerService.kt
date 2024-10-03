@@ -16,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.muilab.notigpt.database.room.DrawerDatabase
-import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.model.notifications.NotiUnit
 import org.muilab.notigpt.util.createNotificationChannel
 import org.muilab.notigpt.util.postOngoingNotification
 

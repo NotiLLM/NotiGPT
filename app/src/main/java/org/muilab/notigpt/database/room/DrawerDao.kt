@@ -7,7 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
-import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.model.notifications.NotiUnit
 
 @Dao
 interface DrawerDao {

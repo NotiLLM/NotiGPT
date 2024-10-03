@@ -1,4 +1,4 @@
-package org.muilab.notigpt.model
+package org.muilab.notigpt.model.notifications
 
 import android.app.Notification
 import android.app.Notification.MessagingStyle.Message.getMessagesFromBundleArray

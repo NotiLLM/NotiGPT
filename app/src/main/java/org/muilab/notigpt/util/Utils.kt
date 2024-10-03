@@ -6,7 +6,7 @@ import android.icu.text.RelativeDateTimeFormatter
 import android.icu.util.ULocale
 import kotlinx.coroutines.Dispatchers
 import org.muilab.notigpt.database.room.DrawerDatabase
-import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.model.notifications.NotiUnit
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date

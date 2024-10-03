@@ -33,13 +33,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import org.muilab.notigpt.database.room.DrawerDatabase
 import org.muilab.notigpt.paging.NotiRepository
-import org.muilab.notigpt.service.GPTService
+import org.muilab.notigpt.service.GeminiService
 import org.muilab.notigpt.service.NotiListenerService
 import org.muilab.notigpt.ui.theme.NotiTaskTheme
 import org.muilab.notigpt.view.screen.MainScreen
 import org.muilab.notigpt.viewModel.DrawerViewModel
 import org.muilab.notigpt.viewModel.DrawerViewModelFactory
-import org.muilab.notigpt.viewModel.GPTViewModel
+import org.muilab.notigpt.viewModel.GeminiViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,11 +73,11 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
 
-        val gptServiceIntent = Intent(this, GPTService::class.java)
-        if (!isServiceRunning(this, GPTService::class.java)) {
-            startService(gptServiceIntent)
+        val geminiServiceIntent = Intent(this, GeminiService::class.java)
+        if (!isServiceRunning(this, GeminiService::class.java)) {
+            startService(geminiServiceIntent)
         }
-        bindService(gptServiceIntent, gptServiceConnection, Context.BIND_AUTO_CREATE)
+        bindService(geminiServiceIntent, gptServiceConnection, Context.BIND_AUTO_CREATE)
 
         setContent {
             NotiTaskTheme {
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen(applicationContext, drawerViewModel, gptViewModel)
+                    MainScreen(applicationContext, drawerViewModel, geminiViewModel)
                 }
             }
         }
@@ -100,16 +100,16 @@ class MainActivity : ComponentActivity() {
 
     private val gptServiceConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
-            val binder = service as GPTService.GPTBinder
-            gptService = binder.getService()
-            gptViewModel.setService(gptService)
+            val binder = service as GeminiService.GPTBinder
+            geminiService = binder.getService()
+            geminiViewModel.setService(geminiService)
         }
 
         override fun onServiceDisconnected(className: ComponentName) {}
     }
 
-    private lateinit var gptService: GPTService
-    private val gptViewModel by viewModels<GPTViewModel>()
+    private lateinit var geminiService: GeminiService
+    private val geminiViewModel by viewModels<GeminiViewModel>()
 
     private fun isNotiListenerEnabled(): Boolean {
         val cn = ComponentName(this, NotiListenerService::class.java)
@@ -134,8 +134,8 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun TestCard(gptViewModel: GPTViewModel) {
-    val result by gptViewModel.response.observeAsState("")
+fun TestCard(geminiViewModel: GeminiViewModel) {
+    val result by geminiViewModel.response.observeAsState("")
     Card (
         Modifier
             .fillMaxHeight(0.4f)

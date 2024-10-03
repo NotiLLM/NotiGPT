@@ -1,4 +1,4 @@
-package org.muilab.notigpt.model
+package org.muilab.notigpt.model.notifications
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -37,6 +37,7 @@ data class NotiUnit(
         metadata.update(context, sbn)
         val isPeople = getIsPeople()
         body.update(sbn, isPeople)
+        resetSummary()
     }
 
     // METADATA RELATED CALLS
@@ -130,6 +131,14 @@ data class NotiUnit(
 
     fun getScore(): Double {
         return outcome.score
+    }
+
+    fun resetSummary() {
+        outcome.summary = ""
+    }
+
+    fun getSummary(): String {
+        return outcome.summary
     }
 
     fun resetGPTValues() {

@@ -5,8 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import org.muilab.notigpt.model.NotiTypeConverters
-import org.muilab.notigpt.model.NotiUnit
+import org.muilab.notigpt.model.notifications.NotiTypeConverters
+import org.muilab.notigpt.model.notifications.NotiUnit
 
 @Database(entities = [NotiUnit::class], version = 1)
 @TypeConverters(NotiTypeConverters::class)

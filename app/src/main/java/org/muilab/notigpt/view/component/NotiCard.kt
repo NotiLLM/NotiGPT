@@ -198,18 +198,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
         )
     }
 
-    var isDropdownMenuExpanded by remember { mutableStateOf(false) }
-    var inputText by remember { mutableStateOf("") }
-
-    // 下拉式選單當鍵盤開出時就可以自己跳到上面來，不需要等到按下換行按鍵才重新佈局
-    var isKeyboardVisible = isKeyboardVisible()
-    LaunchedEffect(isKeyboardVisible) {
-        if (isKeyboardVisible && isDropdownMenuExpanded) {
-            inputText = "\n"
-            delay(5)
-            inputText = inputText.dropLast(1)
-        }
-    }
+    val isDropdownMenuExpanded = remember { mutableStateOf(false) }
 
     val showSummary = {
         anchoredDraggableState.offset < COLLAPSE_THRESHOLD && hasSummary
@@ -228,7 +217,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
                         ?.send()
                 },
                 onLongClick = {
-                    isDropdownMenuExpanded = true
+                    isDropdownMenuExpanded.value = true
                 }
             )
             .onGloballyPositioned { coordinates ->
@@ -246,39 +235,7 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
             containerColor = backgroundColor
         )
     ) {
-        //**
-        DropdownMenu(
-            expanded = isDropdownMenuExpanded,
-            onDismissRequest = { isDropdownMenuExpanded = false },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ){
-                Spacer(modifier = Modifier.weight(0.7f))
-                TextField(
-                    value = inputText,
-                    onValueChange = { inputText = it },
-                    placeholder = { Text("填寫意見") },
-                    modifier = Modifier.weight(8f)
-                )
-                Spacer(modifier = Modifier.weight(0.7f))
-                Button(
-                    onClick = {
-                        getComment(inputText,notiUnit.getHashKey())
-                        isDropdownMenuExpanded = false
-                    },
-                    modifier = Modifier.weight(3f)
-                ){
-                    Text("送出")
-                }
-                Spacer(modifier = Modifier.weight(0.7f))
-            }
-        }
-        //**
+        NotiDropDownMenu(notiUnit, isDropdownMenuExpanded)
 
         val progress = expansionProgress(anchoredDraggableState.offset, maxContentHeightPx)
         Box(
@@ -604,6 +561,54 @@ fun NotiCard(context: Context, notiUnit: NotiUnit, drawerViewModel: DrawerViewMo
             for (noti in notiBody)
                 noti.notiSeen = true
             viewedInfos.clear()
+        }
+    }
+}
+
+@Composable
+fun NotiDropDownMenu(notiUnit: NotiUnit, isDropdownMenuExpanded: MutableState<Boolean>) {
+
+    var inputText by remember { mutableStateOf("") }
+
+    // 下拉式選單當鍵盤開出時就可以自己跳到上面來，不需要等到按下換行按鍵才重新佈局
+    val isKeyboardVisible = isKeyboardVisible()
+    LaunchedEffect(isKeyboardVisible) {
+        if (isKeyboardVisible && isDropdownMenuExpanded.value) {
+            inputText = "\n"
+            delay(5)
+            inputText = inputText.dropLast(1)
+        }
+    }
+
+    DropdownMenu(
+        expanded = isDropdownMenuExpanded.value,
+        onDismissRequest = { isDropdownMenuExpanded.value = false },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ){
+            Spacer(modifier = Modifier.weight(0.7f))
+            TextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                placeholder = { Text("填寫意見") },
+                modifier = Modifier.weight(8f)
+            )
+            Spacer(modifier = Modifier.weight(0.7f))
+            Button(
+                onClick = {
+                    getComment(inputText,notiUnit.getHashKey())
+                    isDropdownMenuExpanded.value = false
+                },
+                modifier = Modifier.weight(3f)
+            ){
+                Text("送出")
+            }
+            Spacer(modifier = Modifier.weight(0.7f))
         }
     }
 }

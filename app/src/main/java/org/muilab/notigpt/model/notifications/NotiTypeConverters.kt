@@ -1,11 +1,11 @@
-package org.muilab.notigpt.model
+package org.muilab.notigpt.model.notifications
 
 import androidx.room.TypeConverter
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.util.TreeSet
 
-class NotiInfoTypeConverter {
+class NotiTypeConverters {
     private val gson = Gson()
 
     @TypeConverter
@@ -45,4 +45,26 @@ class NotiInfoTypeConverter {
         val type = object : TypeToken<MutableSet<String>>() {}.type
         return gson.fromJson<MutableSet<String>>(stringSetString, type)
     }
+
+//    @TypeConverter
+//    fun fromMetadata(metadata: NotiMetadata): String {
+//        return Gson().toJson(metadata)
+//    }
+//
+//    @TypeConverter
+//    fun toMetadata(json: String): NotiMetadata {
+//        val type = object : TypeToken<NotiMetadata>() {}.type
+//        return Gson().fromJson(json, type)
+//    }
+//
+//    @TypeConverter
+//    fun fromOutcome(metadata: NotiOutcome): String {
+//        return Gson().toJson(metadata)
+//    }
+//
+//    @TypeConverter
+//    fun toOutcome(json: String): NotiOutcome {
+//        val type = object : TypeToken<NotiOutcome>() {}.type
+//        return Gson().fromJson(json, type)
+//    }
 }

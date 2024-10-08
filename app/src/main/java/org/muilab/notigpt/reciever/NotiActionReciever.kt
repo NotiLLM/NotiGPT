@@ -20,13 +20,13 @@ class NotiActionReciever : BroadcastReceiver() {
             val notReadNotis = drawerDao.getnotReadNotis()
             when (intent.action) {
                 "read_all" -> {
-                    notReadNotis.forEachIndexed { idx, notiUnit ->
-                        notReadNotis[idx].notiSeen = true
+                    notReadNotis.forEachIndexed { idx, _ ->
+                        notReadNotis[idx].markAsRead()
                     }
                 }
                 "pin_all" -> {
-                    notReadNotis.forEachIndexed { idx, notiUnit ->
-                        notReadNotis[idx].pinned = true
+                    notReadNotis.forEachIndexed { idx, _ ->
+                        notReadNotis[idx].setPinned(true)
                     }
                 }
             }

@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
@@ -39,7 +40,7 @@
         </receiver>
 
         <service
-            android:name=".service.GPTService"
+            android:name=".service.GeminiService"
             android:enabled="true"
             android:exported="true" />
 

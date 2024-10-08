@@ -1,67 +1,67 @@
 package org.muilab.notigpt.database.room
 
 import androidx.lifecycle.LiveData
-import androidx.paging.PagingSource
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import org.muilab.notigpt.model.NotiUnit
+import kotlinx.coroutines.flow.Flow
+import org.muilab.notigpt.model.notifications.NotiUnit
 
 @Dao
 interface DrawerDao {
 
-    @Query("SELECT COUNT(*) FROM noti_drawer WHERE notiVisible = 1")
+    @Query("SELECT COUNT(*) FROM noti_drawer WHERE isVisible = 1")
     fun getAllNotiCount(): Int
 
-    @Query("SELECT COUNT(*) FROM noti_drawer WHERE notiVisible = 1 AND notiSeen = 0")
+    @Query("SELECT COUNT(*) FROM noti_drawer WHERE isVisible = 1 AND wholeNotiRead = 0")
     fun getNotiNotSeenCount(): LiveData<Int>
 
-    @Query("SELECT COUNT(*) FROM noti_drawer WHERE notiVisible = 1 AND notiSeen = 1 AND pinned = 1")
+    @Query("SELECT COUNT(*) FROM noti_drawer WHERE isVisible = 1 AND wholeNotiRead = 1 AND pinned = 1")
     fun getNotiPinnedSeenCount(): Int
-
-    @Query("""
-        SELECT * FROM noti_drawer WHERE notiVisible = 1 
-        ORDER BY 
-            CASE 
-                /* old logic
-                WHEN pinned = 1 AND notiSeen = 1 THEN 1
-                WHEN pinned = 1 AND notiSeen = 0 THEN 2
-                WHEN pinned = 0 AND notiSeen = 0 THEN 3
-                WHEN pinned = 0 AND notiSeen = 1 THEN 4
-                */
-                WHEN notiSeen = 0 THEN 1
-                WHEN notiSeen = 1 THEN 2
-            END,
-            score DESC,
-            importance DESC,
-            latestTime DESC
-    """)
-    fun getAllVisible(): List<NotiUnit>
-
-    @Query("""
-        SELECT * FROM noti_drawer WHERE notiVisible = 1 
-        ORDER BY 
-            CASE 
-                /* old logic
-                WHEN pinned = 1 AND notiSeen = 1 THEN 1
-                WHEN pinned = 1 AND notiSeen = 0 THEN 2
-                WHEN pinned = 0 AND notiSeen = 0 THEN 3
-                WHEN pinned = 0 AND notiSeen = 1 THEN 4
-                */
-                WHEN notiSeen = 0 THEN 1
-                WHEN notiSeen = 1 THEN 2
-            END,
-            score DESC,
-            importance DESC,
-            latestTime DESC
-    """)
-    fun getAllVisiblePaged(): PagingSource<Int, NotiUnit>
 
     @Query(
         """
-        SELECT * FROM noti_drawer WHERE notiVisible = 1 AND notiSeen = 0
+        SELECT * FROM noti_drawer WHERE isVisible = 1 
+        ORDER BY 
+            CASE 
+                /*
+                WHEN pinned = 1 AND wholeNotiRead = 1 THEN 1
+                WHEN pinned = 1 AND wholeNotiRead = 0 THEN 2
+                WHEN pinned = 0 AND wholeNotiRead = 0 THEN 3
+                WHEN pinned = 0 AND wholeNotiRead = 1 THEN 4
+                */
+                WHEN wholeNotiRead = 0 THEN 1
+                WHEN wholeNotiRead = 1 THEN 2
+            END,
+            score DESC,
+            latestTime DESC
+    """
+    )
+    fun getAllVisible(): List<NotiUnit>
+
+    @Query("""
+        SELECT * FROM noti_drawer WHERE isVisible = 1 
+        ORDER BY 
+            CASE 
+                /*
+                WHEN pinned = 1 AND wholeNotiRead = 1 THEN 1
+                WHEN pinned = 1 AND wholeNotiRead = 0 THEN 2
+                WHEN pinned = 0 AND wholeNotiRead = 0 THEN 3
+                WHEN pinned = 0 AND wholeNotiRead = 1 THEN 4
+                */
+                WHEN wholeNotiRead = 0 THEN 1
+                WHEN wholeNotiRead = 1 THEN 2
+            END,
+            score DESC,
+            latestTime DESC
+    """)
+    fun getAllVisibleFlow(): Flow<List<NotiUnit>>
+
+    @Query(
+        """
+        SELECT * FROM noti_drawer WHERE isVisible = 1 AND wholeNotiRead = 0
         ORDER BY latestTime DESC
     """
     )
@@ -69,7 +69,7 @@ interface DrawerDao {
 
     @Query(
         """
-        SELECT * FROM noti_drawer WHERE notiVisible = 1 AND isPeople = 1
+        SELECT * FROM noti_drawer WHERE isVisible = 1 AND isPeople = 1
         ORDER BY latestTime DESC
     """
     )
